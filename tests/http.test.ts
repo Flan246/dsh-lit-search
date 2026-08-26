@@ -76,12 +76,32 @@ describe('proxy support', () => {
 
   it('prefers HTTPS_PROXY over HTTP_PROXY', async () => {
     // HTTP_PROXY is deliberately invalid: if priority were wrong, constructing
-    // the ProxyAgent would throw and fetchJson would return a NETWORK error.
+    // the ProxyAgent would throw; that construction failure is caught inside
+    // fetchJson and mapped to err('NETWORK'), so the result would not be ok.
     process.env.HTTPS_PROXY = 'http://127.0.0.1:1111'
     process.env.HTTP_PROXY = 'not a valid url'
     mockFetch.mockImplementation(async () => jsonResponse({ a: 1 }) as never)
     const r = await fetchJson('https://example.com/proxy-priority')
     expect(r).toEqual({ ok: true, data: { a: 1 } })
+  })
+
+  it('maps an invalid proxy URL to NETWORK instead of rejecting', async () => {
+    process.env.HTTP_PROXY = 'not a valid url'
+    mockFetch.mockImplementation(async () => jsonResponse({ a: 1 }) as never)
+    const r = await fetchJson('https://example.com/bad-proxy')
+    expect(r).toMatchObject({ ok: false, error: { code: 'NETWORK' } })
+    expect(mockFetch).not.toHaveBeenCalled()
+  })
+
+  it('reuses a single ProxyAgent while the proxy URL is unchanged', async () => {
+    process.env.HTTPS_PROXY = 'http://127.0.0.1:7897'
+    mockFetch.mockImplementation(async () => jsonResponse({ a: 1 }) as never)
+    await fetchJson('https://example.com/pool-1')
+    await fetchJson('https://example.com/pool-2')
+    const d1 = (mockFetch.mock.calls[0][1] as { dispatcher?: unknown }).dispatcher
+    const d2 = (mockFetch.mock.calls[1][1] as { dispatcher?: unknown }).dispatcher
+    expect(d1).toBeInstanceOf(ProxyAgent)
+    expect(d2).toBe(d1)
   })
 
   it('passes no dispatcher when no proxy env vars are set', async () => {
@@ -108,6 +128,24 @@ describe('429 backoff', () => {
     const r = await fetchJson('https://example.com/rl2')
     expect(mockFetch).toHaveBeenCalledTimes(2)
     expect(r).toMatchObject({ ok: false, error: { code: 'RATE_LIMITED' } })
+  })
+
+  it('defaults to 1s backoff when Retry-After header is missing', async () => {
+    vi.useFakeTimers()
+    try {
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+      mockFetch
+        .mockResolvedValueOnce(new Response('slow down', { status: 429 }) as never)
+        .mockResolvedValueOnce(jsonResponse({ a: 4 }) as never)
+      const p = fetchJson('https://example.com/rl-default')
+      await vi.advanceTimersByTimeAsync(1000)
+      const r = await p
+      expect(r).toEqual({ ok: true, data: { a: 4 } })
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 1000)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

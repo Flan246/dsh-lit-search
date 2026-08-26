@@ -1,4 +1,4 @@
-import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-DeUhrYqH.js";
+import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-BF67qNjD.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 
 //#region src/plugin.ts

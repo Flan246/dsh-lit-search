@@ -29,6 +29,21 @@ const cache = /* @__PURE__ */ new Map();
 function proxyUrl() {
 	return process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || void 0;
 }
+let pooledAgent = null;
+function getDispatcher() {
+	const url = proxyUrl();
+	if (!url) {
+		pooledAgent = null;
+		return;
+	}
+	if (pooledAgent && pooledAgent.url === url) return pooledAgent.agent;
+	const agent = new ProxyAgent(url);
+	pooledAgent = {
+		url,
+		agent
+	};
+	return agent;
+}
 function cacheSet(url, data) {
 	if (cache.size >= CACHE_MAX) {
 		let n = 0;
@@ -45,8 +60,12 @@ function cacheSet(url, data) {
 async function fetchJson(url) {
 	const hit = cache.get(url);
 	if (hit && hit.expiry > Date.now()) return ok(hit.data);
-	const proxy = proxyUrl();
-	const dispatcher = proxy ? new ProxyAgent(proxy) : void 0;
+	let dispatcher;
+	try {
+		dispatcher = getDispatcher();
+	} catch (e) {
+		return err("NETWORK", e instanceof Error ? e.message : String(e));
+	}
 	let lastErr = null;
 	for (let attempt = 0; attempt < 2; attempt++) try {
 		const init = {
@@ -61,8 +80,16 @@ async function fetchJson(url) {
 		if (res.status === 404) return err("NOT_FOUND", `404: ${url}`);
 		if (res.status === 429) {
 			if (attempt === 0) {
-				const retryAfter = Number(res.headers.get("retry-after"));
-				await sleep((Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter : 1) * 1e3);
+				try {
+					await res.body?.dump?.();
+				} catch {}
+				const ra = res.headers.get("retry-after");
+				let waitSec = 1;
+				if (ra !== null) {
+					const parsed = Number(ra);
+					if (Number.isFinite(parsed) && parsed >= 0) waitSec = parsed;
+				}
+				await sleep(waitSec * 1e3);
 				continue;
 			}
 			return err("RATE_LIMITED", `429: ${url}`);
