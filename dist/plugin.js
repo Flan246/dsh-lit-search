@@ -25,10 +25,7 @@ function apply(ctx) {
 			}
 		},
 		output: {
-			schema: {
-				type: "object",
-				additionalProperties: true
-			},
+			schema: { type: "array" },
 			render: (_args, v) => v?.error ? [{
 				type: "text",
 				text: `Search failed: ${v.error.message}`
@@ -53,10 +50,7 @@ function apply(ctx) {
 			}
 		},
 		output: {
-			schema: {
-				type: "object",
-				additionalProperties: true
-			},
+			schema: { type: "string" },
 			render: (_args, v) => [{
 				type: "text",
 				text: v?.error ? `Cite failed: ${v.error.message}` : String(v)
@@ -103,10 +97,7 @@ function apply(ctx) {
 			}
 		},
 		output: {
-			schema: {
-				type: "object",
-				additionalProperties: true
-			},
+			schema: { type: "array" },
 			render: (_args, v) => v?.error ? [{
 				type: "text",
 				text: `Related failed: ${v.error.message}`
@@ -119,4 +110,4 @@ function apply(ctx) {
 }
 
 //#endregion
-export { apply, inject, name };
+export { apply, asValue, inject, name };

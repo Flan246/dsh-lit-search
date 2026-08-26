@@ -12,7 +12,8 @@ export const inject = ['tools']
 
 // dsh-tools 的 execute 返回类型为 Record<string, JsonValue>，而 lit_* 工具
 // 按约定直接返回 JSON 值（数组/字符串/对象），故此处返回 any。
-const asValue = <T,>(r: Result<T>): any =>
+// 导出以便单测直接覆盖错误拍平分支。
+export const asValue = <T,>(r: Result<T>): any =>
   r.ok ? r.data : { error: r.error }
 
 const paperLines = (papers: Paper[]) => [{ type: 'text' as const, text: formatPapers(papers) }]
@@ -26,7 +27,7 @@ export function apply(ctx: Context) {
       limit: { type: 'number', description: 'Max results (default 10)' },
     },
     output: {
-      schema: { type: 'object', additionalProperties: true },
+      schema: { type: 'array' },
       render: (_args, v: any) => v?.error
         ? [{ type: 'text', text: `Search failed: ${v.error.message}` }]
         : paperLines(v as Paper[]),
@@ -44,7 +45,7 @@ export function apply(ctx: Context) {
       style: { type: 'string', description: 'gbt7714 | apa | bibtex (default gbt7714)' },
     },
     output: {
-      schema: { type: 'object', additionalProperties: true },
+      schema: { type: 'string' },
       render: (_args, v: any) => [{ type: 'text', text: v?.error ? `Cite failed: ${v.error.message}` : String(v) }],
     },
     async execute(args) {
@@ -75,7 +76,7 @@ export function apply(ctx: Context) {
       limit: { type: 'number', description: 'Max results (default 10)' },
     },
     output: {
-      schema: { type: 'object', additionalProperties: true },
+      schema: { type: 'array' },
       render: (_args, v: any) => v?.error
         ? [{ type: 'text', text: `Related failed: ${v.error.message}` }]
         : paperLines(v as Paper[]),
