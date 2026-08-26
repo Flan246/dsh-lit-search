@@ -13,6 +13,9 @@ const cache = new Map<string, { data: unknown; expiry: number }>()
 
 export function clearHttpCache(): void {
   cache.clear()
+  // Also drop the pooled ProxyAgent so tests (and callers) get a fully
+  // clean slate without ordering coupling.
+  pooledAgent = null
 }
 
 function proxyUrl(): string | undefined {
@@ -69,10 +72,11 @@ export async function fetchJson(url: string): Promise<Result<unknown>> {
       if (res.status === 429) {
         if (attempt === 0) {
           // Drain the body so the socket is released before retrying;
-          // a failed drain must not abort the retry.
-          try {
-            await (res.body as { dump?: () => Promise<void> } | null)?.dump?.()
-          } catch { /* best-effort drain */ }
+          // a failed drain must not abort the retry. undici 7 fetch()
+          // returns a standard web ReadableStream body — cancel() is the
+          // standard way to discard it (dump() only exists on
+          // client.request's BodyReadable, not here).
+          try { await res.body?.cancel() } catch { /* best-effort drain */ }
           const ra = res.headers.get('retry-after')
           let waitSec = 1
           if (ra !== null) {

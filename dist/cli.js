@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-BF67qNjD.js";
+import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-DxtU5XcV.js";
 import { realpathSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Command } from "commander";

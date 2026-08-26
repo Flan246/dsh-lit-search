@@ -104,6 +104,19 @@ describe('proxy support', () => {
     expect(d2).toBe(d1)
   })
 
+  it('rebuilds the ProxyAgent after clearHttpCache()', async () => {
+    process.env.HTTPS_PROXY = 'http://127.0.0.1:7897'
+    mockFetch.mockImplementation(async () => jsonResponse({ a: 1 }) as never)
+    await fetchJson('https://example.com/pool-3')
+    clearHttpCache()
+    await fetchJson('https://example.com/pool-4')
+    const d1 = (mockFetch.mock.calls[0][1] as { dispatcher?: unknown }).dispatcher
+    const d2 = (mockFetch.mock.calls[1][1] as { dispatcher?: unknown }).dispatcher
+    expect(d1).toBeInstanceOf(ProxyAgent)
+    expect(d2).toBeInstanceOf(ProxyAgent)
+    expect(d2).not.toBe(d1)
+  })
+
   it('passes no dispatcher when no proxy env vars are set', async () => {
     mockFetch.mockImplementation(async () => jsonResponse({ a: 1 }) as never)
     await fetchJson('https://example.com/no-proxy')
@@ -113,21 +126,46 @@ describe('proxy support', () => {
 })
 
 describe('429 backoff', () => {
+  // Shape matches undici 7 fetch(): body is a standard web ReadableStream
+  // (has cancel(), no dump()). We fake just what fetchJson touches.
+  function fake429(headers: Record<string, string> | null = {}) {
+    return {
+      status: 429,
+      headers: new Headers(headers === null ? {} : { 'Retry-After': '0', ...headers }),
+      body: { cancel: vi.fn(async () => {}) },
+    }
+  }
+
   it('waits per Retry-After then retries once and succeeds', async () => {
+    const first = fake429()
     mockFetch
-      .mockResolvedValueOnce(new Response('slow down', { status: 429, headers: { 'Retry-After': '0' } }) as never)
+      .mockResolvedValueOnce(first as never)
       .mockResolvedValueOnce(jsonResponse({ a: 3 }) as never)
     const r = await fetchJson('https://example.com/rl')
     expect(mockFetch).toHaveBeenCalledTimes(2)
     expect(r).toEqual({ ok: true, data: { a: 3 } })
   })
 
+  it('cancels the first 429 response body before retrying', async () => {
+    const first = fake429()
+    mockFetch
+      .mockResolvedValueOnce(first as never)
+      .mockResolvedValueOnce(jsonResponse({ a: 5 }) as never)
+    const r = await fetchJson('https://example.com/rl-drain')
+    expect(r.ok).toBe(true)
+    expect(first.body.cancel).toHaveBeenCalledTimes(1)
+  })
+
   it('returns RATE_LIMITED when both attempts are 429', async () => {
-    mockFetch.mockResolvedValue(
-      new Response('slow down', { status: 429, headers: { 'Retry-After': '0' } }) as never)
+    const first = fake429()
+    mockFetch
+      .mockResolvedValueOnce(first as never)
+      .mockResolvedValueOnce(fake429() as never)
     const r = await fetchJson('https://example.com/rl2')
     expect(mockFetch).toHaveBeenCalledTimes(2)
     expect(r).toMatchObject({ ok: false, error: { code: 'RATE_LIMITED' } })
+    // body is drained only on the first attempt, before the single retry
+    expect(first.body.cancel).toHaveBeenCalledTimes(1)
   })
 
   it('defaults to 1s backoff when Retry-After header is missing', async () => {
@@ -135,7 +173,7 @@ describe('429 backoff', () => {
     try {
       const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
       mockFetch
-        .mockResolvedValueOnce(new Response('slow down', { status: 429 }) as never)
+        .mockResolvedValueOnce(fake429(null) as never)
         .mockResolvedValueOnce(jsonResponse({ a: 4 }) as never)
       const p = fetchJson('https://example.com/rl-default')
       await vi.advanceTimersByTimeAsync(1000)

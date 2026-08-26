@@ -81,7 +81,7 @@ async function fetchJson(url) {
 		if (res.status === 429) {
 			if (attempt === 0) {
 				try {
-					await res.body?.dump?.();
+					await res.body?.cancel();
 				} catch {}
 				const ra = res.headers.get("retry-after");
 				let waitSec = 1;
