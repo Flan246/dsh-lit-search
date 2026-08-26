@@ -11,6 +11,9 @@ importers:
       commander:
         specifier: ^14.0.0
         version: 14.0.3
+      undici:
+        specifier: ^7.29.0
+        version: 7.29.0
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: ^4.0.1
@@ -933,6 +936,10 @@ packages:
   undici-types@7.18.2:
     resolution: {integrity: sha512-AsuCzffGHJybSaRrmr5eHr81mwJU3kjw6M+uprWvCXiNeN9SOGwQ3Jn8jb8m3Z6izVgknn1R0FTCEAP2QrLY/w==}
 
+  undici@7.29.0:
+    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
+    engines: {node: '>=20.18.1'}
+
   vite-node@3.2.4:
     resolution: {integrity: sha512-EbKSKh+bh1E1IFxeO0pg1n4dvoOTt0UDiXMd/qn++r98+jPO1xtJilvXldeuQ8giIB5IkpjCgMleHMNEsGH6pg==}
     engines: {node: ^18.0.0 || ^20.0.0 || >=22.0.0}
@@ -1735,6 +1742,8 @@ snapshots:
       unconfig-core: 7.5.0
 
   undici-types@7.18.2: {}
+
+  undici@7.29.0: {}
 
   vite-node@3.2.4(@types/node@24.13.3)(jiti@2.7.0):
     dependencies:

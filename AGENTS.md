@@ -27,6 +27,6 @@ the postinstall anyway). Keep the file to only that key — no other config belo
 
 - `core/` is pure TS business logic with zero dsh dependencies; `cli.ts` / `plugin.ts` are thin shells.
 - All core functions return `Result<T>` (see `src/core/types.ts`); never throw raw exceptions to the plugin layer.
-- All HTTP goes through `src/core/http.ts` (10s timeout, 1 retry on 5xx/network errors, UA with mailto).
+- All HTTP goes through `src/core/http.ts` (undici fetch; 10s timeout; 1 retry on 5xx/network; 429 retries once after `Retry-After`; honors HTTP(S)_PROXY via ProxyAgent; 5-min in-memory TTL cache, max 200 entries; UA with mailto).
 - Tests use vitest with all HTTP mocked; never hit real APIs.
 - `dist/` is intentionally NOT gitignored — build and commit before publishing so git installs work without a build step.

@@ -1,5 +1,5 @@
 import { fetchJson as defaultFetchJson } from './http.js'
-import { ok, type Paper, type Result } from './types.js'
+import { err, ok, type Paper, type Result } from './types.js'
 
 interface Deps { fetchJson?: typeof defaultFetchJson }
 
@@ -15,6 +15,10 @@ export async function searchPapers(
     fj(`https://api.crossref.org/works?query=${q}&rows=${limit}&select=DOI,title,author,published,container-title,is-referenced-by-count,URL`),
     fj(`https://api.openalex.org/works?search=${q}&per-page=${limit}`),
   ])
+
+  if (!cr.ok && !oa.ok) {
+    return err('ALL_SOURCES_FAILED', 'both Crossref and OpenAlex are unavailable')
+  }
 
   const byDoi = new Map<string, Paper>()
   if (cr.ok) for (const p of fromCrossref(cr.data)) byDoi.set(p.doi, p)

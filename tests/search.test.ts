@@ -54,4 +54,21 @@ describe('searchPapers', () => {
     if (!r.ok) return
     expect(r.data).toHaveLength(2)
   })
+
+  it('returns ALL_SOURCES_FAILED when both sources fail', async () => {
+    const fetchJson = vi.fn(async () =>
+      ({ ok: false as const, error: { code: 'NETWORK', message: 'down' } }))
+    const r = await searchPapers('attention', {}, { fetchJson })
+    expect(r).toMatchObject({
+      ok: false,
+      error: { code: 'ALL_SOURCES_FAILED', message: 'both Crossref and OpenAlex are unavailable' },
+    })
+  })
+
+  it('returns ok([]) when both sources succeed with no results', async () => {
+    const fetchJson = vi.fn(async (url: string) =>
+      url.includes('crossref') ? ok({ message: { items: [] } }) : ok({ results: [] }))
+    const r = await searchPapers('nonexistent-xyz', {}, { fetchJson })
+    expect(r).toEqual({ ok: true, data: [] })
+  })
 })

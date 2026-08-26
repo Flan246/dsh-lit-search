@@ -1,3 +1,5 @@
+import { ProxyAgent, fetch } from "undici";
+
 //#region src/core/types.ts
 function ok(data) {
 	return {
@@ -17,25 +19,61 @@ function err(code, message) {
 
 //#endregion
 //#region src/core/http.ts
-const UA = "dsh-lit-search/0.1.0 (mailto:lit-search@users.noreply.github.com)";
+const UA = "dsh-lit-search/0.1.1 (mailto:lit-search@users.noreply.github.com)";
 const TIMEOUT_MS = 1e4;
+const CACHE_TTL_MS = 5 * 6e4;
+const CACHE_MAX = 200;
+const CACHE_EVICT_BATCH = 20;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const cache = /* @__PURE__ */ new Map();
+function proxyUrl() {
+	return process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy || void 0;
+}
+function cacheSet(url, data) {
+	if (cache.size >= CACHE_MAX) {
+		let n = 0;
+		for (const key of cache.keys()) {
+			cache.delete(key);
+			if (++n >= CACHE_EVICT_BATCH) break;
+		}
+	}
+	cache.set(url, {
+		data,
+		expiry: Date.now() + CACHE_TTL_MS
+	});
+}
 async function fetchJson(url) {
+	const hit = cache.get(url);
+	if (hit && hit.expiry > Date.now()) return ok(hit.data);
+	const proxy = proxyUrl();
+	const dispatcher = proxy ? new ProxyAgent(proxy) : void 0;
 	let lastErr = null;
 	for (let attempt = 0; attempt < 2; attempt++) try {
-		const res = await fetch(url, {
+		const init = {
 			headers: {
 				"User-Agent": UA,
 				Accept: "application/json"
 			},
 			signal: AbortSignal.timeout(TIMEOUT_MS)
-		});
+		};
+		if (dispatcher) init.dispatcher = dispatcher;
+		const res = await fetch(url, init);
 		if (res.status === 404) return err("NOT_FOUND", `404: ${url}`);
-		if (res.status === 429) return err("RATE_LIMITED", `429: ${url}`);
+		if (res.status === 429) {
+			if (attempt === 0) {
+				const retryAfter = Number(res.headers.get("retry-after"));
+				await sleep((Number.isFinite(retryAfter) && retryAfter >= 0 ? retryAfter : 1) * 1e3);
+				continue;
+			}
+			return err("RATE_LIMITED", `429: ${url}`);
+		}
 		if (!res.ok) {
 			lastErr = err("HTTP_" + res.status, `${res.status}: ${url}`);
 			continue;
 		}
-		return ok(await res.json());
+		const data = await res.json();
+		cacheSet(url, data);
+		return ok(data);
 	} catch (e) {
 		lastErr = err("NETWORK", e instanceof Error ? e.message : String(e));
 	}
@@ -49,6 +87,7 @@ async function searchPapers(query, opts = {}, deps = {}) {
 	const fj = deps.fetchJson ?? fetchJson;
 	const q = encodeURIComponent(query);
 	const [cr, oa] = await Promise.all([fj(`https://api.crossref.org/works?query=${q}&rows=${limit}&select=DOI,title,author,published,container-title,is-referenced-by-count,URL`), fj(`https://api.openalex.org/works?search=${q}&per-page=${limit}`)]);
+	if (!cr.ok && !oa.ok) return err("ALL_SOURCES_FAILED", "both Crossref and OpenAlex are unavailable");
 	const byDoi = /* @__PURE__ */ new Map();
 	if (cr.ok) for (const p of fromCrossref(cr.data)) byDoi.set(p.doi, p);
 	if (oa.ok) {

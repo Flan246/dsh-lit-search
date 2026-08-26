@@ -5,6 +5,8 @@ description: Search academic papers and format citations (GB/T 7714 / APA / BibT
 
 # Literature Search
 
+If the host already has lit_* plugin tools registered (lit_search/lit_cite/lit_bib/lit_related), prefer calling those tools directly instead of the CLI.
+
 Run the bundled CLI (installed as `dsh-lit-search`, or `npx dsh-lit-search`):
 
 - `dsh-lit-search [--json] search "<keywords>" [-n 10]` — merged Crossref+OpenAlex search
