@@ -11,7 +11,7 @@ interface Paper {
   url: string | null;
 }
 //#endregion
-//#region src/cli.d.ts
+//#region src/core/format.d.ts
 declare function formatPapers(papers: Paper[]): string;
 //#endregion
 export { formatPapers };

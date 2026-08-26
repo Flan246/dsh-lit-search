@@ -5,15 +5,11 @@ import { searchPapers } from './core/search.js'
 import { citePaper, type CiteStyle } from './core/cite.js'
 import { bibEntries } from './core/bib.js'
 import { relatedPapers } from './core/related.js'
-import type { Paper, Result } from './core/types.js'
+import type { Result } from './core/types.js'
 
-export function formatPapers(papers: Paper[]): string {
-  if (papers.length === 0) return 'No papers found.'
-  return papers.map((p, i) =>
-    `${i + 1}. ${p.title} (${p.year ?? 'n.d.'}) — ${p.authors.slice(0, 3).join(', ')}` +
-    `${p.venue ? ` [${p.venue}]` : ''}\n   doi:${p.doi} cited:${p.citationCount ?? '-'}`,
-  ).join('\n')
-}
+// formatPapers 实现位于 core/format.ts，此处 re-export 保持既有引用路径不变
+import { formatPapers } from './core/format.js'
+export { formatPapers }
 
 function print<T>(r: Result<T>, asJson: boolean, render: (d: T) => string): void {
   if (!r.ok) {
