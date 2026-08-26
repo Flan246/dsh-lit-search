@@ -118,16 +118,16 @@ function gbt7714(w) {
 		w.published?.["date-parts"]?.[0]?.[0] ?? "",
 		[w.volume, w.issue && `(${w.issue})`].filter(Boolean).join("")
 	].filter(Boolean).join(", ");
-	return `${authors}. ${w.title?.[0] ?? ""}[${mark}]. ${tail}.`;
+	return `${authors ? `${authors}. ` : ""}${w.title?.[0] ?? ""}[${mark}]. ${tail}.`;
 }
 function apa(w) {
 	const ns = names(w);
-	const fmt = (n) => `${n.family}, ${n.given.split(/\s+/).map((s) => s[0] + ".").join(" ")}`;
-	const head = ns.slice(0, 3).map(fmt).join(", ");
+	const fmt = (n) => [n.family, n.given.split(/\s+/).filter(Boolean).map((s) => s[0] + ".").join(" ")].filter(Boolean).join(", ");
+	const head = ns.slice(0, 3).map(fmt).filter(Boolean).join(", ");
 	const authors = ns.length > 3 ? `${head}, et al.` : head;
 	const year = w.published?.["date-parts"]?.[0]?.[0] ?? "n.d.";
 	const venue = w["container-title"]?.[0] ?? w.publisher ?? "";
-	return `${authors} (${year}). ${w.title?.[0] ?? ""}. ${venue}. https://doi.org/${w.DOI}`;
+	return `${authors ? `${authors} ` : ""}(${year}). ${w.title?.[0] ?? ""}. ${venue}. https://doi.org/${w.DOI}`;
 }
 function bibtex(w) {
 	const ns = names(w);

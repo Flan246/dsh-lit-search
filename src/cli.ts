@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-import { pathToFileURL } from 'node:url'
+import { realpathSync } from 'node:fs'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { Command } from 'commander'
 import { searchPapers } from './core/search.js'
 import { citePaper, type CiteStyle } from './core/cite.js'
@@ -20,7 +21,7 @@ function print<T>(r: Result<T>, asJson: boolean, render: (d: T) => string): void
   console.log(asJson ? JSON.stringify(r.data, null, 2) : render(r.data))
 }
 
-const program = new Command()
+export const program = new Command()
 program.name('dsh-lit-search').description('Literature search & citation tools (Crossref + OpenAlex)')
   .option('--json', 'print machine-readable JSON', false)
 
@@ -49,7 +50,17 @@ program.command('related').argument('<doi>').option('-n, --limit <n>', 'max resu
     print(await relatedPapers(doi, { limit: Number(o.limit) }), program.opts().json, formatPapers)
   })
 
-// 只在作为可执行入口时 parse（测试 import 不触发）
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// 只在作为可执行入口时 parse（测试 import 不触发）。
+// npm 全局安装会经软链调用 bin，两侧都过 realpath 再比较，
+// 保证软链与直路径调用都能命中守卫；realpath 失败时回退到原始 URL 比较。
+function isMain(): boolean {
+  if (!process.argv[1]) return false
+  try {
+    return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])
+  } catch {
+    return import.meta.url === pathToFileURL(process.argv[1]).href
+  }
+}
+if (isMain()) {
   program.parseAsync()
 }

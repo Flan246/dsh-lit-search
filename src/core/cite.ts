@@ -39,18 +39,19 @@ function gbt7714(w: any): string {
   const year = w.published?.['date-parts']?.[0]?.[0] ?? ''
   const vol = [w.volume, w.issue && `(${w.issue})`].filter(Boolean).join('')
   const tail = [venue, year, vol].filter(Boolean).join(', ')
-  return `${authors}. ${w.title?.[0] ?? ''}[${mark}]. ${tail}.`
+  return `${authors ? `${authors}. ` : ''}${w.title?.[0] ?? ''}[${mark}]. ${tail}.`
 }
 
 function apa(w: any): string {
   const ns = names(w)
   const fmt = (n: { family: string; given: string }) =>
-    `${n.family}, ${n.given.split(/\s+/).map((s) => s[0] + '.').join(' ')}`
-  const head = ns.slice(0, 3).map(fmt).join(', ')
+    [n.family, n.given.split(/\s+/).filter(Boolean).map((s) => s[0] + '.').join(' ')]
+      .filter(Boolean).join(', ')
+  const head = ns.slice(0, 3).map(fmt).filter(Boolean).join(', ')
   const authors = ns.length > 3 ? `${head}, et al.` : head
   const year = w.published?.['date-parts']?.[0]?.[0] ?? 'n.d.'
   const venue = w['container-title']?.[0] ?? w.publisher ?? ''
-  return `${authors} (${year}). ${w.title?.[0] ?? ''}. ${venue}. https://doi.org/${w.DOI}`
+  return `${authors ? `${authors} ` : ''}(${year}). ${w.title?.[0] ?? ''}. ${venue}. https://doi.org/${w.DOI}`
 }
 
 function bibtex(w: any): string {

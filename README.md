@@ -32,8 +32,9 @@ npx dsh-lit-search bib 10.1038/nature14539 10.48550/arXiv.1706.03762
 npx dsh-lit-search related 10.1038/nature14539 -n 5
 ```
 
-All commands print human-readable text by default; pass `--json` for machine
-output. Exit codes: `0` success, `1` business error, `2` usage error.
+All commands print human-readable text by default; pass `--json` before the
+subcommand (e.g. `npx dsh-lit-search --json search "transformers"`) for
+machine output. Exit codes: `0` success, `1` business error, `2` usage error.
 
 ### 3. Agent skill
 

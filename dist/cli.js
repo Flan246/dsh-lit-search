@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-D_oOJb6t.js";
-import { pathToFileURL } from "node:url";
+import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-C-b84ykX.js";
+import { realpathSync } from "node:fs";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { Command } from "commander";
 
 //#region src/cli.ts
@@ -36,7 +37,15 @@ program.command("bib").argument("<dois...>").action(async (dois) => {
 program.command("related").argument("<doi>").option("-n, --limit <n>", "max results", "10").action(async (doi, o) => {
 	print(await relatedPapers(doi, { limit: Number(o.limit) }), program.opts().json, formatPapers);
 });
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) program.parseAsync();
+function isMain() {
+	if (!process.argv[1]) return false;
+	try {
+		return realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1]);
+	} catch {
+		return import.meta.url === pathToFileURL(process.argv[1]).href;
+	}
+}
+if (isMain()) program.parseAsync();
 
 //#endregion
-export { formatPapers };
+export { formatPapers, program };

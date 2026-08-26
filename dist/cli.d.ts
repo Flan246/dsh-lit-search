@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { Command } from "commander";
+
 //#region src/core/types.d.ts
 interface Paper {
   doi: string;
@@ -14,4 +16,7 @@ interface Paper {
 //#region src/core/format.d.ts
 declare function formatPapers(papers: Paper[]): string;
 //#endregion
-export { formatPapers };
+//#region src/cli.d.ts
+declare const program: Command;
+//#endregion
+export { formatPapers, program };

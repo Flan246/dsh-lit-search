@@ -2,20 +2,39 @@
   "name": "dsh-lit-search",
   "version": "0.1.0",
   "description": "Academic literature search, citation and BibTeX tools for DeepSeek Harness and any agent (Crossref + OpenAlex).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/FSMargoo/dsh-lit-search.git"
+  },
+  "keywords": [
+    "deepseek-harness",
+    "dsh-plugin",
+    "literature",
+    "citation",
+    "bibtex",
+    "crossref",
+    "openalex"
+  ],
   "type": "module",
   "main": "./dist/plugin.js",
+  "types": "./dist/plugin.d.ts",
   "bin": { "dsh-lit-search": "./dist/cli.js" },
   "files": ["dist", "cordis.patch.yml", "skill", "README.md"],
   "engines": { "node": ">=20" },
   "scripts": {
     "build": "tsdown",
     "test": "vitest run",
-    "prepack": "pnpm run build"
+    "prepack": "tsdown"
   },
   "dsh": { "bundle": { "patch": "./cordis.patch.yml" } },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
     "@deepseek-ai/dsh-tools": "^0.1.1-rc.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": { "optional": true },
+    "@deepseek-ai/dsh-tools": { "optional": true }
   },
   "dependencies": { "commander": "^14.0.0" },
   "devDependencies": {

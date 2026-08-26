@@ -47,4 +47,28 @@ describe('citePaper', () => {
     })
     expect(r).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
   })
+
+  it('handles family-only institutional author without "undefined." initials', async () => {
+    const org = {
+      message: {
+        ...work.message,
+        author: [{ family: 'World Health Organization' }],
+      },
+    }
+    const fetchOrg = vi.fn(async () => ok(org))
+    const apaR = await citePaper('10.1000/xyz', 'apa', { fetchJson: fetchOrg })
+    expect(apaR.ok && apaR.data).toContain('World Health Organization (2017).')
+    expect(apaR.ok && apaR.data).not.toContain('undefined')
+    const gbtR = await citePaper('10.1000/xyz', 'gbt7714', { fetchJson: fetchOrg })
+    expect(gbtR.ok && gbtR.data).toContain('World Health Organization. Attention Is All You Need[C].')
+  })
+
+  it('omits leading punctuation when the work has no authors', async () => {
+    const anon = { message: { ...work.message, author: [] } }
+    const fetchAnon = vi.fn(async () => ok(anon))
+    const apaR = await citePaper('10.1000/xyz', 'apa', { fetchJson: fetchAnon })
+    expect(apaR.ok && apaR.data).toMatch(/^\(2017\)\. Attention Is All You Need\./)
+    const gbtR = await citePaper('10.1000/xyz', 'gbt7714', { fetchJson: fetchAnon })
+    expect(gbtR.ok && gbtR.data).toMatch(/^Attention Is All You Need\[C\]\./)
+  })
 })

@@ -7,11 +7,12 @@ description: Search academic papers and format citations (GB/T 7714 / APA / BibT
 
 Run the bundled CLI (installed as `dsh-lit-search`, or `npx dsh-lit-search`):
 
-- `dsh-lit-search search "<keywords>" [-n 10] [--json]` — merged Crossref+OpenAlex search
-- `dsh-lit-search cite <doi> [-s gbt7714|apa|bibtex]` — format one citation
-- `dsh-lit-search bib <doi1> <doi2> ...` — batch BibTeX entries
-- `dsh-lit-search related <doi> [-n 10]` — related works via OpenAlex
+- `dsh-lit-search [--json] search "<keywords>" [-n 10]` — merged Crossref+OpenAlex search
+- `dsh-lit-search [--json] cite <doi> [-s gbt7714|apa|bibtex]` — format one citation
+- `dsh-lit-search [--json] bib <doi1> <doi2> ...` — batch BibTeX entries
+- `dsh-lit-search [--json] related <doi> [-n 10]` — related works via OpenAlex
 
-All commands print human-readable text by default; pass `--json` for machine output.
-Prefer `--json` when chaining results into files. GB/T 7714 is the right default
-for Chinese-language theses.
+All commands print human-readable text by default; pass `--json` (before the
+subcommand, e.g. `dsh-lit-search --json search "<keywords>"`) for machine
+output. Prefer `--json` when chaining results into files. GB/T 7714 is the
+right default for Chinese-language theses.
