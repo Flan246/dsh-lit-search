@@ -4,7 +4,10 @@ import { defineTool } from "@deepseek-ai/dsh-tools";
 //#region src/plugin.ts
 const name = "dsh-lit-search";
 const inject = ["tools"];
-const asValue = (r) => r.ok ? r.data : { error: r.error };
+const asValue = (r) => {
+	if (!r.ok) throw new Error(r.error.message);
+	return r.data;
+};
 const paperLines = (papers) => [{
 	type: "text",
 	text: formatPapers(papers)
@@ -26,10 +29,7 @@ function apply(ctx) {
 		},
 		output: {
 			schema: { type: "array" },
-			render: (_args, v) => v?.error ? [{
-				type: "text",
-				text: `Search failed: ${v.error.message}`
-			}] : paperLines(v)
+			render: (_args, v) => paperLines(v)
 		},
 		async execute(args) {
 			return asValue(await searchPapers(args.query, { limit: args.limit }));
@@ -53,7 +53,7 @@ function apply(ctx) {
 			schema: { type: "string" },
 			render: (_args, v) => [{
 				type: "text",
-				text: v?.error ? `Cite failed: ${v.error.message}` : String(v)
+				text: String(v)
 			}]
 		},
 		async execute(args) {
@@ -75,7 +75,7 @@ function apply(ctx) {
 			},
 			render: (_args, v) => [{
 				type: "text",
-				text: v?.error ? `Bib failed: ${v.error.message}` : v.entries
+				text: v.entries
 			}]
 		},
 		async execute(args) {
@@ -98,10 +98,7 @@ function apply(ctx) {
 		},
 		output: {
 			schema: { type: "array" },
-			render: (_args, v) => v?.error ? [{
-				type: "text",
-				text: `Related failed: ${v.error.message}`
-			}] : paperLines(v)
+			render: (_args, v) => paperLines(v)
 		},
 		async execute(args) {
 			return asValue(await relatedPapers(args.doi, { limit: args.limit }));
@@ -110,4 +107,4 @@ function apply(ctx) {
 }
 
 //#endregion
-export { apply, asValue, inject, name };
+export { apply, inject, name };

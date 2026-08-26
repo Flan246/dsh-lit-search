@@ -12,9 +12,13 @@ export const inject = ['tools']
 
 // dsh-tools 的 execute 返回类型为 Record<string, JsonValue>，而 lit_* 工具
 // 按约定直接返回 JSON 值（数组/字符串/对象），故此处返回 any。
-// 导出以便单测直接覆盖错误拍平分支。
-export const asValue = <T,>(r: Result<T>): any =>
-  r.ok ? r.data : { error: r.error }
+// 业务失败按官方契约（adding-a-tool.md: throw for infrastructure failures）
+// 直接 throw：注册表捕获后走正常 error-result 路径，真实 message 带给 agent，
+// 且不与 output.schema 的 array/string 根类型冲突。
+const asValue = <T,>(r: Result<T>): any => {
+  if (!r.ok) throw new Error(r.error.message)
+  return r.data
+}
 
 const paperLines = (papers: Paper[]) => [{ type: 'text' as const, text: formatPapers(papers) }]
 
@@ -28,9 +32,7 @@ export function apply(ctx: Context) {
     },
     output: {
       schema: { type: 'array' },
-      render: (_args, v: any) => v?.error
-        ? [{ type: 'text', text: `Search failed: ${v.error.message}` }]
-        : paperLines(v as Paper[]),
+      render: (_args, v: any) => paperLines(v as Paper[]),
     },
     async execute(args) {
       return asValue(await searchPapers(args.query, { limit: args.limit }))
@@ -46,7 +48,7 @@ export function apply(ctx: Context) {
     },
     output: {
       schema: { type: 'string' },
-      render: (_args, v: any) => [{ type: 'text', text: v?.error ? `Cite failed: ${v.error.message}` : String(v) }],
+      render: (_args, v: any) => [{ type: 'text', text: String(v) }],
     },
     async execute(args) {
       return asValue(await citePaper(args.doi, (args.style ?? 'gbt7714') as any))
@@ -61,7 +63,7 @@ export function apply(ctx: Context) {
     },
     output: {
       schema: { type: 'object', additionalProperties: true },
-      render: (_args, v: any) => [{ type: 'text', text: v?.error ? `Bib failed: ${v.error.message}` : v.entries }],
+      render: (_args, v: any) => [{ type: 'text', text: v.entries }],
     },
     async execute(args) {
       return asValue(await bibEntries(args.dois as string[]))
@@ -77,9 +79,7 @@ export function apply(ctx: Context) {
     },
     output: {
       schema: { type: 'array' },
-      render: (_args, v: any) => v?.error
-        ? [{ type: 'text', text: `Related failed: ${v.error.message}` }]
-        : paperLines(v as Paper[]),
+      render: (_args, v: any) => paperLines(v as Paper[]),
     },
     async execute(args) {
       return asValue(await relatedPapers(args.doi, { limit: args.limit }))

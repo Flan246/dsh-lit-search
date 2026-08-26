@@ -1,6 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { searchPapers } from '../src/core/search.js'
+import { citePaper } from '../src/core/cite.js'
+import { bibEntries } from '../src/core/bib.js'
+import { relatedPapers } from '../src/core/related.js'
 import * as plugin from '../src/plugin.js'
-import { err, ok } from '../src/core/types.js'
+import { err } from '../src/core/types.js'
+
+vi.mock('../src/core/search.js', () => ({ searchPapers: vi.fn() }))
+vi.mock('../src/core/cite.js', () => ({ citePaper: vi.fn() }))
+vi.mock('../src/core/bib.js', () => ({ bibEntries: vi.fn() }))
+vi.mock('../src/core/related.js', () => ({ relatedPapers: vi.fn() }))
 
 const registeredTools = () => {
   const registered: any[] = []
@@ -32,42 +41,30 @@ describe('plugin', () => {
   })
 })
 
-describe('asValue', () => {
-  it('passes ok data through', () => {
-    expect(plugin.asValue(ok([1, 2]))).toEqual([1, 2])
-    expect(plugin.asValue(ok('text'))).toBe('text')
-  })
-
-  it('flattens err Result to an { error } value', () => {
-    const v = plugin.asValue(err('HTTP_ERROR', 'boom'))
-    expect(v).toEqual({ error: { code: 'HTTP_ERROR', message: 'boom' } })
-  })
-})
-
-describe('tool render error branches', () => {
-  const errorValue = { error: { code: 'HTTP_ERROR', message: 'boom' } }
-
-  it('lit_search renders the error message', () => {
+// 业务失败按官方契约 throw：注册表捕获后走 error-result 路径，
+// 真实 message 带给 agent，且不与 output.schema 根类型冲突。
+describe('tool execute throws on business failure', () => {
+  it('lit_search throws the core error message', async () => {
+    vi.mocked(searchPapers).mockResolvedValue(err('HTTP_ERROR', 'search boom'))
     const t = registeredTools().get('lit_search')
-    expect(t.output.render({ query: 'x' }, errorValue))
-      .toEqual([{ type: 'text', text: 'Search failed: boom' }])
+    await expect(t.execute({ query: 'x' })).rejects.toThrow('search boom')
   })
 
-  it('lit_cite renders the error message', () => {
+  it('lit_cite throws the core error message', async () => {
+    vi.mocked(citePaper).mockResolvedValue(err('NOT_FOUND', 'cite boom'))
     const t = registeredTools().get('lit_cite')
-    expect(t.output.render({ doi: '10.1/x' }, errorValue))
-      .toEqual([{ type: 'text', text: 'Cite failed: boom' }])
+    await expect(t.execute({ doi: '10.1/x' })).rejects.toThrow('cite boom')
   })
 
-  it('lit_bib renders the error message', () => {
+  it('lit_bib throws the core error message', async () => {
+    vi.mocked(bibEntries).mockResolvedValue(err('HTTP_ERROR', 'bib boom'))
     const t = registeredTools().get('lit_bib')
-    expect(t.output.render({ dois: ['10.1/x'] }, errorValue))
-      .toEqual([{ type: 'text', text: 'Bib failed: boom' }])
+    await expect(t.execute({ dois: ['10.1/x'] })).rejects.toThrow('bib boom')
   })
 
-  it('lit_related renders the error message', () => {
+  it('lit_related throws the core error message', async () => {
+    vi.mocked(relatedPapers).mockResolvedValue(err('HTTP_ERROR', 'related boom'))
     const t = registeredTools().get('lit_related')
-    expect(t.output.render({ doi: '10.1/x' }, errorValue))
-      .toEqual([{ type: 'text', text: 'Related failed: boom' }])
+    await expect(t.execute({ doi: '10.1/x' })).rejects.toThrow('related boom')
   })
 })
