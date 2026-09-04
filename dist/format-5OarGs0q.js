@@ -19,7 +19,7 @@ function err(code, message) {
 
 //#endregion
 //#region src/core/http.ts
-const UA = "dsh-lit-search/0.1.1 (mailto:lit-search@users.noreply.github.com)";
+const UA = "dsh-lit-search/0.1.2 (mailto:lit-search@users.noreply.github.com)";
 const TIMEOUT_MS = 1e4;
 const CACHE_TTL_MS = 5 * 6e4;
 const CACHE_MAX = 200;
@@ -102,7 +102,9 @@ async function fetchJson(url) {
 		cacheSet(url, data);
 		return ok(data);
 	} catch (e) {
-		lastErr = err("NETWORK", e instanceof Error ? e.message : String(e));
+		const base = e instanceof Error ? e.message : String(e);
+		const cause = e?.cause;
+		lastErr = err("NETWORK", `${base}${cause ? `（cause: ${cause.code ?? cause.message ?? ""}）` : ""}（如在使用代理，请检查 HTTPS_PROXY 设置）`);
 	}
 	return lastErr ?? err("NETWORK", "unreachable");
 }
@@ -154,12 +156,36 @@ function fromOpenAlex(data) {
 //#endregion
 //#region src/core/cite.ts
 async function citePaper(doi, style, deps = {}) {
-	const r = await (deps.fetchJson ?? fetchJson)(`https://api.crossref.org/works/${encodeURIComponent(doi)}`);
-	if (!r.ok) return r;
-	const w = r.data.message;
+	const fj = deps.fetchJson ?? fetchJson;
+	const r = await fj(`https://api.crossref.org/works/${encodeURIComponent(doi)}`);
+	let w;
+	if (r.ok) w = r.data.message;
+	else {
+		const oa = await fj(`https://api.openalex.org/works/doi:${encodeURIComponent(doi)}`);
+		if (!oa.ok) return oa;
+		w = fromOpenAlexWork(oa.data);
+	}
 	if (style === "gbt7714") return ok(gbt7714(w));
 	if (style === "apa") return ok(apa(w));
 	return ok(bibtex(w));
+}
+function fromOpenAlexWork(w) {
+	const rawVenue = w.primary_location?.source?.display_name ?? "";
+	const venue = /^arxiv\b/i.test(rawVenue) ? "" : rawVenue;
+	return {
+		DOI: String(w.doi ?? "").replace(/^https?:\/\/doi\.org\//i, ""),
+		title: [w.title ?? ""],
+		author: (w.authorships ?? []).map((a) => {
+			const parts = String(a.author?.display_name ?? "").trim().split(/\s+/).filter(Boolean);
+			return {
+				family: parts.pop() ?? "",
+				given: parts.join(" ")
+			};
+		}),
+		published: { "date-parts": [[w.publication_year ?? ""]] },
+		"container-title": venue ? [venue] : void 0,
+		type: venue ? "journal-article" : "posted-content"
+	};
 }
 const TYPE_MAP = {
 	"journal-article": "J",
@@ -178,10 +204,16 @@ function gbt7714(w) {
 	const ns = names(w);
 	const head = ns.slice(0, 3).map((n) => `${n.family} ${n.given[0] ?? ""}`.trimEnd()).join(", ");
 	const authors = ns.length > 3 ? `${head}, et al` : head;
+	const venue = w["container-title"]?.[0] ?? w.publisher ?? "";
+	const year = w.published?.["date-parts"]?.[0]?.[0] ?? "";
+	if (w.type === "posted-content" && !venue) {
+		const y = year ? ` (${year}).` : "";
+		return `${authors ? `${authors}. ` : ""}${w.title?.[0] ?? ""}[EB/OL].${y} https://doi.org/${w.DOI}.`;
+	}
 	const mark = TYPE_MAP[w.type] ?? "J";
 	const tail = [
-		w["container-title"]?.[0] ?? w.publisher ?? "",
-		w.published?.["date-parts"]?.[0]?.[0] ?? "",
+		venue,
+		year,
 		[w.volume, w.issue && `(${w.issue})`].filter(Boolean).join("")
 	].filter(Boolean).join(", ");
 	return `${authors ? `${authors}. ` : ""}${w.title?.[0] ?? ""}[${mark}]. ${tail}.`;
@@ -193,7 +225,11 @@ function apa(w) {
 	const authors = ns.length > 3 ? `${head}, et al.` : head;
 	const year = w.published?.["date-parts"]?.[0]?.[0] ?? "n.d.";
 	const venue = w["container-title"]?.[0] ?? w.publisher ?? "";
-	return `${authors ? `${authors} ` : ""}(${year}). ${w.title?.[0] ?? ""}. ${venue}. https://doi.org/${w.DOI}`;
+	return [
+		`${authors ? `${authors} ` : ""}(${year}). ${w.title?.[0] ?? ""}.`,
+		venue ? `${venue}.` : "",
+		`https://doi.org/${w.DOI}`
+	].filter(Boolean).join(" ");
 }
 function bibtex(w) {
 	const ns = names(w);
@@ -208,6 +244,7 @@ function bibtex(w) {
 		year ? `  year = {${year}}` : null,
 		w.volume ? `  volume = {${w.volume}}` : null,
 		w.issue ? `  number = {${w.issue}}` : null,
+		w.type === "posted-content" && !w["container-title"]?.[0] ? `  howpublished = {arXiv preprint}` : null,
 		`  doi = {${w.DOI}}`
 	].filter(Boolean).join(",\n")}\n}`;
 }

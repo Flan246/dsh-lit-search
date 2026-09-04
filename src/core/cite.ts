@@ -11,11 +11,45 @@ export async function citePaper(
 ): Promise<Result<string>> {
   const fj = deps.fetchJson ?? defaultFetchJson
   const r = await fj(`https://api.crossref.org/works/${encodeURIComponent(doi)}`)
-  if (!r.ok) return r
-  const w = (r.data as any).message
+  let w: any
+  if (r.ok) {
+    w = (r.data as any).message
+  } else {
+    // Crossref does not index arXiv's DataCite DOIs (10.48550/arxiv.*);
+    // OpenAlex does, so fall back to it on any Crossref failure.
+    const oa = await fj(`https://api.openalex.org/works/doi:${encodeURIComponent(doi)}`)
+    if (!oa.ok) return oa
+    w = fromOpenAlexWork(oa.data)
+  }
   if (style === 'gbt7714') return ok(gbt7714(w))
   if (style === 'apa') return ok(apa(w))
   return ok(bibtex(w))
+}
+
+// Normalize an OpenAlex work into a Crossref-message-like shape so the
+// formatters below can be reused. Differences handled here: `doi` is a full
+// URL, authors only carry `display_name` ("given family" order — last word
+// becomes family), year is `publication_year`, and the venue lives at
+// `primary_location.source.display_name`. Works without a venue are pure
+// preprints and are marked `posted-content` so formatters emit the
+// [EB/OL] / @misc-preprint variants.
+export function fromOpenAlexWork(w: any): any {
+  const rawVenue = w.primary_location?.source?.display_name ?? ''
+  // OpenAlex lists "arXiv (Cornell University)" as the source for arXiv
+  // preprints; that is a repository, not a journal venue, so such works keep
+  // the preprint form ([EB/OL] / @misc).
+  const venue = /^arxiv\b/i.test(rawVenue) ? '' : rawVenue
+  return {
+    DOI: String(w.doi ?? '').replace(/^https?:\/\/doi\.org\//i, ''),
+    title: [w.title ?? ''],
+    author: (w.authorships ?? []).map((a: any) => {
+      const parts = String(a.author?.display_name ?? '').trim().split(/\s+/).filter(Boolean)
+      return { family: parts.pop() ?? '', given: parts.join(' ') }
+    }),
+    published: { 'date-parts': [[w.publication_year ?? '']] },
+    'container-title': venue ? [venue] : undefined,
+    type: venue ? 'journal-article' : 'posted-content',
+  }
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -34,9 +68,14 @@ function gbt7714(w: any): string {
   const ns = names(w)
   const head = ns.slice(0, 3).map((n) => `${n.family} ${n.given[0] ?? ''}`.trimEnd()).join(', ')
   const authors = ns.length > 3 ? `${head}, et al` : head
-  const mark = TYPE_MAP[w.type] ?? 'J'
   const venue = w['container-title']?.[0] ?? w.publisher ?? ''
   const year = w.published?.['date-parts']?.[0]?.[0] ?? ''
+  if (w.type === 'posted-content' && !venue) {
+    // Pure preprint: GB/T 7714 electronic-resource form.
+    const y = year ? ` (${year}).` : ''
+    return `${authors ? `${authors}. ` : ''}${w.title?.[0] ?? ''}[EB/OL].${y} https://doi.org/${w.DOI}.`
+  }
+  const mark = TYPE_MAP[w.type] ?? 'J'
   const vol = [w.volume, w.issue && `(${w.issue})`].filter(Boolean).join('')
   const tail = [venue, year, vol].filter(Boolean).join(', ')
   return `${authors ? `${authors}. ` : ''}${w.title?.[0] ?? ''}[${mark}]. ${tail}.`
@@ -51,7 +90,11 @@ function apa(w: any): string {
   const authors = ns.length > 3 ? `${head}, et al.` : head
   const year = w.published?.['date-parts']?.[0]?.[0] ?? 'n.d.'
   const venue = w['container-title']?.[0] ?? w.publisher ?? ''
-  return `${authors ? `${authors} ` : ''}(${year}). ${w.title?.[0] ?? ''}. ${venue}. https://doi.org/${w.DOI}`
+  return [
+    `${authors ? `${authors} ` : ''}(${year}). ${w.title?.[0] ?? ''}.`,
+    venue ? `${venue}.` : '',
+    `https://doi.org/${w.DOI}`,
+  ].filter(Boolean).join(' ')
 }
 
 function bibtex(w: any): string {
@@ -68,6 +111,8 @@ function bibtex(w: any): string {
     year ? `  year = {${year}}` : null,
     w.volume ? `  volume = {${w.volume}}` : null,
     w.issue ? `  number = {${w.issue}}` : null,
+    w.type === 'posted-content' && !w['container-title']?.[0]
+      ? `  howpublished = {arXiv preprint}` : null,
     `  doi = {${w.DOI}}`,
   ].filter(Boolean)
   return `@${entryType}{${key},\n${lines.join(',\n')}\n}`

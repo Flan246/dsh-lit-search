@@ -5,7 +5,7 @@ description: Search academic papers and format citations (GB/T 7714 / APA / BibT
 
 # Literature Search
 
-If the host already has lit_* plugin tools registered (lit_search/lit_cite/lit_bib/lit_related), prefer calling those tools directly instead of the CLI.
+**If the host already has lit_* plugin tools registered (lit_search/lit_cite/lit_bib/lit_related), you MUST prefer calling those tools directly. The CLI below is the fallback for hosts without the plugin.**
 
 Run the bundled CLI (installed as `dsh-lit-search`, or `npx dsh-lit-search`):
 

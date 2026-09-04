@@ -55,6 +55,18 @@ describe('fetchJson', () => {
     expect(mockFetch).toHaveBeenCalledTimes(2)
     expect(r).toMatchObject({ ok: false, error: { code: 'NETWORK' } })
   })
+
+  it('includes cause info and proxy hint in NETWORK message', async () => {
+    const e = new TypeError('fetch failed')
+    Object.assign(e, { cause: { code: 'ECONNREFUSED' } })
+    mockFetch.mockRejectedValue(e as never)
+    const r = await fetchJson('https://example.com/cause')
+    expect(r.ok).toBe(false)
+    if (!r.ok) {
+      expect(r.error.message).toContain('ECONNREFUSED')
+      expect(r.error.message).toContain('HTTPS_PROXY')
+    }
+  })
 })
 
 describe('proxy support', () => {
