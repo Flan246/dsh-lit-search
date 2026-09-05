@@ -1,6 +1,6 @@
 {
   "name": "dsh-lit-search",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Academic literature search, citation and BibTeX tools for DeepSeek Harness and any agent (Crossref + OpenAlex).",
   "license": "MIT",
   "repository": {

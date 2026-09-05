@@ -1,7 +1,7 @@
 import { fetch, ProxyAgent, type RequestInit as UndiciRequestInit } from 'undici'
 import { err, ok, type Result } from './types.js'
 
-const UA = 'dsh-lit-search/0.1.2 (mailto:lit-search@users.noreply.github.com)'
+const UA = 'dsh-lit-search/0.1.3 (mailto:lit-search@users.noreply.github.com)'
 const TIMEOUT_MS = 10_000
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_MAX = 200

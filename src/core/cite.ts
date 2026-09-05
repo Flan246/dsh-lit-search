@@ -33,12 +33,36 @@ export async function citePaper(
 // `primary_location.source.display_name`. Works without a venue are pure
 // preprints and are marked `posted-content` so formatters emit the
 // [EB/OL] / @misc-preprint variants.
+// Preprint repositories as listed by OpenAlex `source.display_name` —
+// repositories, not journal venues, so works from them keep the preprint
+// form ([EB/OL] / @misc). Matched as lowercase prefixes.
+const PREPRINT_SERVERS = [
+  'arxiv',
+  'biorxiv',
+  'medrxiv',
+  'ssrn',
+  'chemrxiv',
+  'research square',
+  'preprints.org',
+  'techrxiv',
+]
+
+// Returns the canonical server label for bibtex `howpublished` when the
+// OpenAlex source is a known preprint repository, else null. arXiv gets a
+// fixed label since OpenAlex names it "arXiv (Cornell University)"; other
+// servers keep their display_name casing.
+function preprintServer(rawVenue: string): string | null {
+  const v = rawVenue.trim()
+  if (!v) return null
+  const hit = PREPRINT_SERVERS.find((p) => v.toLowerCase().startsWith(p))
+  if (!hit) return null
+  return hit === 'arxiv' ? 'arXiv' : v
+}
+
 export function fromOpenAlexWork(w: any): any {
   const rawVenue = w.primary_location?.source?.display_name ?? ''
-  // OpenAlex lists "arXiv (Cornell University)" as the source for arXiv
-  // preprints; that is a repository, not a journal venue, so such works keep
-  // the preprint form ([EB/OL] / @misc).
-  const venue = /^arxiv\b/i.test(rawVenue) ? '' : rawVenue
+  const server = preprintServer(rawVenue)
+  const venue = server ? '' : rawVenue
   return {
     DOI: String(w.doi ?? '').replace(/^https?:\/\/doi\.org\//i, ''),
     title: [w.title ?? ''],
@@ -49,6 +73,7 @@ export function fromOpenAlexWork(w: any): any {
     published: { 'date-parts': [[w.publication_year ?? '']] },
     'container-title': venue ? [venue] : undefined,
     type: venue ? 'journal-article' : 'posted-content',
+    'preprint-server': server ?? undefined,
   }
 }
 
@@ -112,7 +137,7 @@ function bibtex(w: any): string {
     w.volume ? `  volume = {${w.volume}}` : null,
     w.issue ? `  number = {${w.issue}}` : null,
     w.type === 'posted-content' && !w['container-title']?.[0]
-      ? `  howpublished = {arXiv preprint}` : null,
+      ? `  howpublished = {${w['preprint-server'] ?? 'arXiv'} preprint}` : null,
     `  doi = {${w.DOI}}`,
   ].filter(Boolean)
   return `@${entryType}{${key},\n${lines.join(',\n')}\n}`

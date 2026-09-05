@@ -19,7 +19,7 @@ function err(code, message) {
 
 //#endregion
 //#region src/core/http.ts
-const UA = "dsh-lit-search/0.1.2 (mailto:lit-search@users.noreply.github.com)";
+const UA = "dsh-lit-search/0.1.3 (mailto:lit-search@users.noreply.github.com)";
 const TIMEOUT_MS = 1e4;
 const CACHE_TTL_MS = 5 * 6e4;
 const CACHE_MAX = 200;
@@ -169,9 +169,27 @@ async function citePaper(doi, style, deps = {}) {
 	if (style === "apa") return ok(apa(w));
 	return ok(bibtex(w));
 }
+const PREPRINT_SERVERS = [
+	"arxiv",
+	"biorxiv",
+	"medrxiv",
+	"ssrn",
+	"chemrxiv",
+	"research square",
+	"preprints.org",
+	"techrxiv"
+];
+function preprintServer(rawVenue) {
+	const v = rawVenue.trim();
+	if (!v) return null;
+	const hit = PREPRINT_SERVERS.find((p) => v.toLowerCase().startsWith(p));
+	if (!hit) return null;
+	return hit === "arxiv" ? "arXiv" : v;
+}
 function fromOpenAlexWork(w) {
 	const rawVenue = w.primary_location?.source?.display_name ?? "";
-	const venue = /^arxiv\b/i.test(rawVenue) ? "" : rawVenue;
+	const server = preprintServer(rawVenue);
+	const venue = server ? "" : rawVenue;
 	return {
 		DOI: String(w.doi ?? "").replace(/^https?:\/\/doi\.org\//i, ""),
 		title: [w.title ?? ""],
@@ -184,7 +202,8 @@ function fromOpenAlexWork(w) {
 		}),
 		published: { "date-parts": [[w.publication_year ?? ""]] },
 		"container-title": venue ? [venue] : void 0,
-		type: venue ? "journal-article" : "posted-content"
+		type: venue ? "journal-article" : "posted-content",
+		"preprint-server": server ?? void 0
 	};
 }
 const TYPE_MAP = {
@@ -244,7 +263,7 @@ function bibtex(w) {
 		year ? `  year = {${year}}` : null,
 		w.volume ? `  volume = {${w.volume}}` : null,
 		w.issue ? `  number = {${w.issue}}` : null,
-		w.type === "posted-content" && !w["container-title"]?.[0] ? `  howpublished = {arXiv preprint}` : null,
+		w.type === "posted-content" && !w["container-title"]?.[0] ? `  howpublished = {${w["preprint-server"] ?? "arXiv"} preprint}` : null,
 		`  doi = {${w.DOI}}`
 	].filter(Boolean).join(",\n")}\n}`;
 }

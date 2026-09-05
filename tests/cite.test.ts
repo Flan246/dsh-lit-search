@@ -143,6 +143,58 @@ describe('citePaper OpenAlex fallback', () => {
     expect(bib.ok && bib.data).toContain('howpublished = {arXiv preprint}')
   })
 
+  it('treats a bioRxiv source as a preprint and names the server in howpublished', async () => {
+    const biorxivSourced = {
+      ...oaVenueWork,
+      doi: 'https://doi.org/10.1101/2024.01.01.573890',
+      primary_location: { source: { display_name: 'bioRxiv' } },
+    }
+    const fetchJson = fallbackFetch(biorxivSourced)
+    const gbt = await citePaper('10.1101/2024.01.01.573890', 'gbt7714', { fetchJson })
+    expect(gbt.ok && gbt.data).toBe(
+      'Smith J, Doe J. Some Published Paper[EB/OL]. (2024). https://doi.org/10.1101/2024.01.01.573890.',
+    )
+    const bib = await citePaper('10.1101/2024.01.01.573890', 'bibtex', { fetchJson })
+    expect(bib.ok && bib.data).toContain('@misc{smith2024some')
+    expect(bib.ok && bib.data).toContain('howpublished = {bioRxiv preprint}')
+    expect(bib.ok && bib.data).not.toContain('journal =')
+    const apaR = await citePaper('10.1101/2024.01.01.573890', 'apa', { fetchJson })
+    expect(apaR.ok && apaR.data).toBe(
+      'Smith, J., Doe, J. (2024). Some Published Paper. https://doi.org/10.1101/2024.01.01.573890',
+    )
+  })
+
+  it.each([
+    ['medRxiv', 'medRxiv preprint'],
+    ['SSRN', 'SSRN preprint'],
+    ['ChemRxiv', 'ChemRxiv preprint'],
+    ['Research Square', 'Research Square preprint'],
+    ['Preprints.org', 'Preprints.org preprint'],
+    ['TechRxiv', 'TechRxiv preprint'],
+  ])('treats %s as a preprint server, not a journal venue', async (source, howpublished) => {
+    const fetchJson = fallbackFetch({
+      ...oaVenueWork,
+      primary_location: { source: { display_name: source } },
+    })
+    const gbt = await citePaper('10.48550/arxiv.2401.04088', 'gbt7714', { fetchJson })
+    expect(gbt.ok && gbt.data).toContain('[EB/OL]')
+    expect(gbt.ok && gbt.data).not.toContain(source)
+    const bib = await citePaper('10.48550/arxiv.2401.04088', 'bibtex', { fetchJson })
+    expect(bib.ok && bib.data).toContain('@misc{smith2024some')
+    expect(bib.ok && bib.data).toContain(`howpublished = {${howpublished}}`)
+  })
+
+  it('still treats a real journal source as a venue after the preprint table', async () => {
+    const fetchJson = fallbackFetch({
+      ...oaVenueWork,
+      primary_location: { source: { display_name: 'Journal of Preprints and Archives' } },
+    })
+    const gbt = await citePaper('10.48550/arxiv.2401.04088', 'gbt7714', { fetchJson })
+    expect(gbt.ok && gbt.data).toBe(
+      'Smith J, Doe J. Some Published Paper[J]. Journal of Preprints and Archives, 2024.',
+    )
+  })
+
   it('returns NOT_FOUND when both Crossref and OpenAlex 404', async () => {
     const r = await citePaper('10.48550/arxiv.9999.99999', 'apa', { fetchJson: fallbackFetch() })
     expect(r).toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } })
