@@ -1,0 +1,8 @@
+name: 文献调研串联（MoE）
+plugins: [dsh-lit-search]
+prompt: 帮我调研一下 2024 年以来 mixture of experts 方向的代表性论文，挑 2 篇最有影响力的，给我 GB/T 7714 格式的参考文献条目。
+timeout: 600
+assertions:
+  - tool_called: lit_search
+  - tool_called: lit_cite
+  - output_matches: '\[(J|C|EB/OL)\]'

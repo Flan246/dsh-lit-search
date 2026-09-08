@@ -1,0 +1,8 @@
+name: DOI 取 BibTeX 条目
+plugins: [dsh-lit-search]
+prompt: 给我 DOI 10.1162/neco.1991.3.1.79 这篇论文的 BibTeX 条目。
+timeout: 600
+assertions:
+  - tool_called: lit_bib
+  - tool_args_contains: [lit_bib, "10.1162/neco.1991.3.1.79"]
+  - output_matches: '@[a-zA-Z]+\s*\{'

@@ -1,0 +1,7 @@
+name: 相关工作推荐
+plugins: [dsh-lit-search]
+prompt: 我在读 DOI 10.1038/nature14539（Deep learning）这篇论文，帮我推荐几篇和它相关的代表性论文，给出标题和年份。
+timeout: 600
+assertions:
+  - tool_called: lit_related
+  - output_matches: '(19|20)[0-9]{2}'
