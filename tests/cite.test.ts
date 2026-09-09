@@ -211,3 +211,56 @@ describe('citePaper OpenAlex fallback', () => {
     expect(fetchJson.mock.calls.every(([url]) => !String(url).includes('openalex.org'))).toBe(true)
   })
 })
+
+describe('0.2.0 fixes', () => {
+  const work = {
+    message: {
+      DOI: '10.1000/xyz', title: ['Attention Is All You Need'],
+      author: [{ given: 'Ashish', family: 'Vaswani' }, { given: 'Noam', family: 'Shazeer' }],
+      published: { 'date-parts': [[2017]] },
+      'container-title': ['NeurIPS'], type: 'proceedings-article',
+    },
+  }
+  const fetchOk = vi.fn(async () => ok(work))
+
+  it('gbt7714-numeric prefixes [1]', async () => {
+    const r = await citePaper('10.1000/xyz', 'gbt7714-numeric', { fetchJson: fetchOk })
+    expect(r.ok && r.data.startsWith('[1] Vaswani A, Shazeer N.')).toBe(true)
+  })
+
+  it('apa falls back to n.d. when year missing', async () => {
+    const noYear = { message: { ...work.message, published: undefined } }
+    const r = await citePaper('10.1000/xyz', 'apa', { fetchJson: vi.fn(async () => ok(noYear)) })
+    expect(r.ok && r.data).toContain('(n.d.)')
+    expect(r.ok && r.data).not.toContain('()')
+  })
+
+  it('bibtex single-name author has no trailing comma', async () => {
+    const single = { message: { ...work.message, author: [{ family: 'DeepSeek-AI' }] } }
+    const r = await citePaper('10.1000/xyz', 'bibtex', { fetchJson: vi.fn(async () => ok(single)) })
+    expect(r.ok && r.data).toContain('author = {DeepSeek-AI}')
+    expect(r.ok && r.data).not.toContain('DeepSeek-AI,')
+  })
+})
+
+describe('openalex author name splitting', () => {
+  // 经 lit_related / 回退路径的 OpenAlex work 会走 names() 拆分
+  it('keeps nobility particles in family name', async () => {
+    const work = {
+      message: undefined,
+    }
+    // 走 OpenAlex 回退：Crossref 404
+    const oaWork = {
+      title: 'Some Paper', publication_year: 2020,
+      authorships: [{ author: { display_name: 'Diego de Las Casas' } }],
+      primary_location: { source: null }, cited_by_count: 1, doi: 'https://doi.org/10.9/x',
+    }
+    const fetchJson = vi.fn(async (url: string) =>
+      url.includes('crossref')
+        ? { ok: false as const, error: { code: 'NOT_FOUND', message: '404' } }
+        : ok(oaWork))
+    const r = await citePaper('10.9/x', 'apa', { fetchJson })
+    expect(r.ok && r.data).toContain('de Las Casas, D.')
+    expect(r.ok && r.data).not.toContain('Casas, D. d. L.')
+  })
+})

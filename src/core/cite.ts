@@ -1,7 +1,7 @@
 import { fetchJson as defaultFetchJson } from './http.js'
 import { ok, type Result } from './types.js'
 
-export type CiteStyle = 'gbt7714' | 'apa' | 'bibtex'
+export type CiteStyle = 'gbt7714' | 'gbt7714-numeric' | 'apa' | 'bibtex'
 interface Deps { fetchJson?: typeof defaultFetchJson }
 
 export async function citePaper(
@@ -22,14 +22,15 @@ export async function citePaper(
     w = fromOpenAlexWork(oa.data)
   }
   if (style === 'gbt7714') return ok(gbt7714(w))
+  if (style === 'gbt7714-numeric') return ok(`[1] ${gbt7714(w)}`)
   if (style === 'apa') return ok(apa(w))
   return ok(bibtex(w))
 }
 
 // Normalize an OpenAlex work into a Crossref-message-like shape so the
 // formatters below can be reused. Differences handled here: `doi` is a full
-// URL, authors only carry `display_name` ("given family" order — last word
-// becomes family), year is `publication_year`, and the venue lives at
+// URL, authors only carry `display_name` ("given family" order — family is
+// the last word plus any nobility particles before it, see splitDisplayName),
 // `primary_location.source.display_name`. Works without a venue are pure
 // preprints and are marked `posted-content` so formatters emit the
 // [EB/OL] / @misc-preprint variants.
@@ -59,6 +60,21 @@ function preprintServer(rawVenue: string): string | null {
   return hit === 'arxiv' ? 'arXiv' : v
 }
 
+// Nobility/lowercase surname particles ("de", "van", "von", …) belong to the
+// family name; matching is case-insensitive.
+const PARTICLES = new Set(['de', 'van', 'von', 'der', 'den', 'di', 'da', 'del', 'della', 'las', 'le', 'bin', 'ibn'])
+
+// Split an OpenAlex display_name ("given family" order) into family/given,
+// keeping consecutive trailing particles ("Diego de Las Casas" → family
+// "de Las Casas", given "Diego").
+function splitDisplayName(name: string): { family: string; given: string } {
+  const words = name.trim().split(/\s+/).filter(Boolean)
+  if (words.length < 2) return { family: name.trim(), given: '' }
+  let i = words.length - 1
+  while (i > 0 && PARTICLES.has(words[i - 1]!.toLowerCase())) i--
+  return { family: words.slice(i).join(' '), given: words.slice(0, i).join(' ') }
+}
+
 export function fromOpenAlexWork(w: any): any {
   const rawVenue = w.primary_location?.source?.display_name ?? ''
   const server = preprintServer(rawVenue)
@@ -66,10 +82,8 @@ export function fromOpenAlexWork(w: any): any {
   return {
     DOI: String(w.doi ?? '').replace(/^https?:\/\/doi\.org\//i, ''),
     title: [w.title ?? ''],
-    author: (w.authorships ?? []).map((a: any) => {
-      const parts = String(a.author?.display_name ?? '').trim().split(/\s+/).filter(Boolean)
-      return { family: parts.pop() ?? '', given: parts.join(' ') }
-    }),
+    author: (w.authorships ?? []).map((a: any) =>
+      splitDisplayName(String(a.author?.display_name ?? ''))),
     published: { 'date-parts': [[w.publication_year ?? '']] },
     'container-title': venue ? [venue] : undefined,
     type: venue ? 'journal-article' : 'posted-content',
@@ -113,7 +127,7 @@ function apa(w: any): string {
       .filter(Boolean).join(', ')
   const head = ns.slice(0, 3).map(fmt).filter(Boolean).join(', ')
   const authors = ns.length > 3 ? `${head}, et al.` : head
-  const year = w.published?.['date-parts']?.[0]?.[0] ?? 'n.d.'
+  const year = w.published?.['date-parts']?.[0]?.[0] || 'n.d.'
   const venue = w['container-title']?.[0] ?? w.publisher ?? ''
   return [
     `${authors ? `${authors} ` : ''}(${year}). ${w.title?.[0] ?? ''}.`,
@@ -130,7 +144,7 @@ function bibtex(w: any): string {
   const entryType = w.type === 'journal-article' ? 'article'
     : w.type === 'proceedings-article' ? 'inproceedings' : 'misc'
   const lines = [
-    `  author = {${ns.map((n) => `${n.family}, ${n.given}`.trimEnd()).join(' and ')}}`,
+    `  author = {${ns.map((n) => [n.family, n.given].filter(Boolean).join(', ')).join(' and ')}}`,
     `  title = {${w.title?.[0] ?? ''}}`,
     w['container-title']?.[0] ? `  ${entryType === 'article' ? 'journal' : 'booktitle'} = {${w['container-title'][0]}}` : null,
     year ? `  year = {${year}}` : null,
