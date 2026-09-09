@@ -5,7 +5,7 @@ export interface Paper {
   year: number | null
   venue: string | null
   citationCount: number | null
-  source: 'crossref' | 'openalex'
+  source: 'crossref' | 'openalex' | 'semanticscholar'
   url: string | null
 }
 

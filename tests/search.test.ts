@@ -72,3 +72,63 @@ describe('searchPapers', () => {
     expect(r).toEqual({ ok: true, data: [] })
   })
 })
+
+describe('searchPapers filters, sort and third source', () => {
+  const crItem = { message: { items: [] } }
+  const s2Payload = {
+    data: [
+      {
+        title: 'S2 Paper', year: 2024, venue: 'NeurIPS', citationCount: 42,
+        externalIds: { DOI: '10.9999/s2paper' },
+        authors: [{ name: 'Alice Smith' }],
+      },
+      { title: 'No DOI paper', year: 2024 },  // 无 DOI 应被丢弃
+    ],
+  }
+
+  it('adds year filter params to crossref and openalex urls', async () => {
+    const urls: string[] = []
+    const fetchJson = vi.fn(async (url: string) => { urls.push(url); return ok(crItem) })
+    await searchPapers('moe', { yearFrom: 2024, yearTo: 2026 }, { fetchJson })
+    expect(urls.find((u) => u.includes('crossref'))).toContain('from-pub-date%3A2024')
+    expect(urls.find((u) => u.includes('openalex'))).toContain('from_publication_date%3A2024')
+  })
+
+  it('merges semantic scholar results and dedupes by doi', async () => {
+    const fetchJson = vi.fn(async (url: string) =>
+      url.includes('semanticscholar') ? ok(s2Payload) : ok(crItem))
+    const r = await searchPapers('moe', {}, { fetchJson })
+    expect(r.ok).toBe(true)
+    if (!r.ok) return
+    expect(r.data).toHaveLength(1)
+    expect(r.data[0]).toMatchObject({ doi: '10.9999/s2paper', source: 'semanticscholar', citationCount: 42 })
+  })
+
+  it('sort=date orders by year descending', async () => {
+    const payload = {
+      results: [
+        { doi: 'https://doi.org/10.1/old', title: 'Old', publication_year: 2020, authorships: [], primary_location: { source: null }, cited_by_count: 9 },
+        { doi: 'https://doi.org/10.1/new', title: 'New', publication_year: 2026, authorships: [], primary_location: { source: null }, cited_by_count: 1 },
+      ],
+    }
+    const fetchJson = vi.fn(async (url: string) =>
+      url.includes('openalex') ? ok(payload) : ok(crItem))
+    const r = await searchPapers('x', { sort: 'date' }, { fetchJson })
+    expect(r.ok && r.data[0]?.title).toBe('New')
+  })
+
+  it('semantic scholar failure alone does not break the search', async () => {
+    const fetchJson = vi.fn(async (url: string) =>
+      url.includes('semanticscholar')
+        ? { ok: false as const, error: { code: 'RATE_LIMITED', message: 'slow down' } }
+        : ok(crItem))
+    const r = await searchPapers('x', {}, { fetchJson })
+    expect(r.ok).toBe(true)
+  })
+
+  it('all three sources failing returns ALL_SOURCES_FAILED', async () => {
+    const fetchJson = vi.fn(async () => ({ ok: false as const, error: { code: 'NETWORK', message: 'down' } }))
+    const r = await searchPapers('x', {}, { fetchJson })
+    expect(r).toMatchObject({ ok: false, error: { code: 'ALL_SOURCES_FAILED' } })
+  })
+})
