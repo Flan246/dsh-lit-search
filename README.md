@@ -1,5 +1,10 @@
 # dsh-lit-search
 
+[![npm version](https://img.shields.io/npm/v/dsh-lit-search)](https://www.npmjs.com/package/dsh-lit-search)
+[![npm downloads](https://img.shields.io/npm/dw/dsh-lit-search)](https://www.npmjs.com/package/dsh-lit-search)
+[![GitHub stars](https://img.shields.io/github/stars/Flan246/dsh-lit-search)](https://github.com/Flan246/dsh-lit-search)
+[![license](https://img.shields.io/npm/l/dsh-lit-search)](./LICENSE)
+
 Academic literature search, citation and BibTeX tools for DeepSeek Harness and
 any agent. One package, three forms: dsh Cordis plugin, standalone CLI, and an
 agent skill.
