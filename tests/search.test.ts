@@ -65,7 +65,7 @@ describe('searchPapers', () => {
     })
   })
 
-  it('returns ok([]) when both sources succeed with no results', async () => {
+  it('returns ok([]) when all sources succeed with no results', async () => {
     const fetchJson = vi.fn(async (url: string) =>
       url.includes('crossref') ? ok({ message: { items: [] } }) : ok({ results: [] }))
     const r = await searchPapers('nonexistent-xyz', {}, { fetchJson })
