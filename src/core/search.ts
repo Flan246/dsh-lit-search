@@ -43,7 +43,7 @@ export async function searchPapers(
   ])
 
   if (!cr.ok && !oa.ok && !s2.ok) {
-    return err('ALL_SOURCES_FAILED', 'both Crossref and OpenAlex are unavailable')
+    return err('ALL_SOURCES_FAILED', 'Crossref, OpenAlex and Semantic Scholar are all unavailable')
   }
 
   const byDoi = new Map<string, Paper>()

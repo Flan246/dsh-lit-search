@@ -25,26 +25,34 @@ const paperLines = (papers: Paper[]) => [{ type: 'text' as const, text: formatPa
 export function apply(ctx: Context) {
   ctx.tools.register(defineTool({
     name: 'lit_search',
-    description: 'Search academic papers on Crossref and OpenAlex by keyword. Returns merged, deduplicated results with DOI and citation counts.',
+    description: 'Search academic papers on Crossref, OpenAlex and Semantic Scholar by keyword. Returns merged, deduplicated results with DOI and citation counts.',
     parameters: {
       query: { type: 'string', required: true, description: 'Search keywords' },
       limit: { type: 'number', description: 'Max results (default 10)' },
+      year_from: { type: 'number', description: 'Earliest publication year' },
+      year_to: { type: 'number', description: 'Latest publication year' },
+      sort: { type: 'string', description: 'citations (default) | date | relevance' },
     },
     output: {
       schema: { type: 'array' },
       render: (_args, v: any) => paperLines(v as Paper[]),
     },
     async execute(args) {
-      return asValue(await searchPapers(args.query, { limit: args.limit }))
+      return asValue(await searchPapers(args.query, {
+        limit: args.limit,
+        yearFrom: args.year_from,
+        yearTo: args.year_to,
+        sort: args.sort as 'citations' | 'date' | 'relevance' | undefined,
+      }))
     },
   }))
 
   ctx.tools.register(defineTool({
     name: 'lit_cite',
-    description: 'Format a citation for a DOI. Styles: gbt7714 (Chinese standard), apa, bibtex.',
+    description: 'Format a citation for a DOI. Styles: gbt7714 (Chinese standard), gbt7714-numeric (numbered), apa, bibtex.',
     parameters: {
       doi: { type: 'string', required: true, description: 'Paper DOI' },
-      style: { type: 'string', description: 'gbt7714 | apa | bibtex (default gbt7714)' },
+      style: { type: 'string', description: 'gbt7714 | gbt7714-numeric | apa | bibtex (default gbt7714)' },
     },
     output: {
       schema: { type: 'string' },

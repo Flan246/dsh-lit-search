@@ -11,9 +11,12 @@ agent skill.
 
 ## Features
 
-- **Merged search** — keyword search across Crossref and OpenAlex, deduplicated
-  by DOI, with title/authors/year/venue/citation counts.
-- **Citation formatting** — GB/T 7714 (default, for Chinese theses), APA, BibTeX.
+- **Merged search** — keyword search across Crossref, OpenAlex and Semantic
+  Scholar, deduplicated by DOI, with title/authors/year/venue/citation counts.
+  Filter by publication year (`--from`/`--to`) and sort by citations, date or
+  relevance (`--sort`).
+- **Citation formatting** — GB/T 7714 (default, for Chinese theses), GB/T 7714
+  numeric (`[1]`-style, `gbt7714-numeric`), APA, BibTeX.
 - **Batch BibTeX** — generate a combined `.bib` for a list of DOIs, with the
   failed DOIs reported separately.
 - **Related works** — related papers for a DOI via OpenAlex `related_works`.
@@ -32,7 +35,9 @@ Registers four agent tools: `lit_search`, `lit_cite`, `lit_bib`, `lit_related`.
 
 ```bash
 npx dsh-lit-search search "attention is all you need" -n 5
+npx dsh-lit-search search "moe" --from 2024 --sort date
 npx dsh-lit-search cite 10.1038/nature14539 -s bibtex
+npx dsh-lit-search cite 10.1038/nature14539 -s gbt7714-numeric
 npx dsh-lit-search bib 10.1038/nature14539 10.48550/arXiv.1706.03762
 npx dsh-lit-search related 10.1038/nature14539 -n 5
 ```
@@ -50,8 +55,9 @@ directory). The skill tells the agent to run the CLI above.
 
 - [Crossref](https://www.crossref.org/) — DOI metadata and works search.
 - [OpenAlex](https://openalex.org/) — works search, citation counts, related works.
+- [Semantic Scholar](https://www.semanticscholar.org/) — works search, citation counts.
 
-Both are free public APIs; no API key required. HTTP goes through a single
+All are free public APIs; no API key required. HTTP goes through a single
 layer with a 10s timeout, one retry on 5xx/network errors, and a polite
 `mailto:` User-Agent.
 

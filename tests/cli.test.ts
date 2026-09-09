@@ -36,3 +36,19 @@ describe('global --json option', () => {
     expect(program.opts().json).toBe(true)
   })
 })
+
+describe('0.2.0 cli params', () => {
+  it('search defines --from/--to/--sort options', async () => {
+    const { program } = await import('../src/cli.js')
+    const search = program.commands.find((c) => c.name() === 'search')
+    const flags = search!.options.map((o) => o.long)
+    expect(flags).toContain('--from')
+    expect(flags).toContain('--to')
+    expect(flags).toContain('--sort')
+  })
+
+  it('cite style whitelist includes gbt7714-numeric', async () => {
+    const { CITE_STYLES } = await import('../src/cli.js')
+    expect(CITE_STYLES).toContain('gbt7714-numeric')
+  })
+})

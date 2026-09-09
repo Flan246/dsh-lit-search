@@ -22,18 +22,31 @@ function print<T>(r: Result<T>, asJson: boolean, render: (d: T) => string): void
 }
 
 export const program = new Command()
-program.name('dsh-lit-search').description('Literature search & citation tools (Crossref + OpenAlex)')
+program.name('dsh-lit-search').description('Literature search & citation tools (Crossref + OpenAlex + Semantic Scholar)')
   .option('--json', 'print machine-readable JSON', false)
 
+export const CITE_STYLES = ['gbt7714', 'gbt7714-numeric', 'apa', 'bibtex']
+
 program.command('search').argument('<query>').option('-n, --limit <n>', 'max results', '10')
-  .action(async (query: string, o: { limit: string }) => {
-    print(await searchPapers(query, { limit: Number(o.limit) }), program.opts().json, formatPapers)
+  .option('--from <year>', 'earliest publication year')
+  .option('--to <year>', 'latest publication year')
+  .option('--sort <mode>', 'citations | date | relevance', 'citations')
+  .action(async (query: string, o: { limit: string; from?: string; to?: string; sort: string }) => {
+    if (!['citations', 'date', 'relevance'].includes(o.sort)) {
+      console.error(`unknown sort: ${o.sort}`); process.exitCode = 2; return
+    }
+    print(await searchPapers(query, {
+      limit: Number(o.limit),
+      yearFrom: o.from ? Number(o.from) : undefined,
+      yearTo: o.to ? Number(o.to) : undefined,
+      sort: o.sort as 'citations' | 'date' | 'relevance',
+    }), program.opts().json, formatPapers)
   })
 
-program.command('cite').argument('<doi>').option('-s, --style <style>', 'gbt7714|apa|bibtex', 'gbt7714')
+program.command('cite').argument('<doi>').option('-s, --style <style>', 'gbt7714|gbt7714-numeric|apa|bibtex', 'gbt7714')
   .action(async (doi: string, o: { style: string }) => {
     const style = o.style as CiteStyle
-    if (!['gbt7714', 'apa', 'bibtex'].includes(style)) {
+    if (!CITE_STYLES.includes(style)) {
       console.error(`unknown style: ${o.style}`); process.exitCode = 2; return
     }
     print(await citePaper(doi, style), program.opts().json, (s) => s)

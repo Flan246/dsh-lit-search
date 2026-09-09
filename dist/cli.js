@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-C_FLHpe2.js";
+import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-DHjyu7xV.js";
 import { realpathSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Command } from "commander";
@@ -14,17 +14,33 @@ function print(r, asJson, render) {
 	console.log(asJson ? JSON.stringify(r.data, null, 2) : render(r.data));
 }
 const program = new Command();
-program.name("dsh-lit-search").description("Literature search & citation tools (Crossref + OpenAlex)").option("--json", "print machine-readable JSON", false);
-program.command("search").argument("<query>").option("-n, --limit <n>", "max results", "10").action(async (query, o) => {
-	print(await searchPapers(query, { limit: Number(o.limit) }), program.opts().json, formatPapers);
-});
-program.command("cite").argument("<doi>").option("-s, --style <style>", "gbt7714|apa|bibtex", "gbt7714").action(async (doi, o) => {
-	const style = o.style;
+program.name("dsh-lit-search").description("Literature search & citation tools (Crossref + OpenAlex + Semantic Scholar)").option("--json", "print machine-readable JSON", false);
+const CITE_STYLES = [
+	"gbt7714",
+	"gbt7714-numeric",
+	"apa",
+	"bibtex"
+];
+program.command("search").argument("<query>").option("-n, --limit <n>", "max results", "10").option("--from <year>", "earliest publication year").option("--to <year>", "latest publication year").option("--sort <mode>", "citations | date | relevance", "citations").action(async (query, o) => {
 	if (![
-		"gbt7714",
-		"apa",
-		"bibtex"
-	].includes(style)) {
+		"citations",
+		"date",
+		"relevance"
+	].includes(o.sort)) {
+		console.error(`unknown sort: ${o.sort}`);
+		process.exitCode = 2;
+		return;
+	}
+	print(await searchPapers(query, {
+		limit: Number(o.limit),
+		yearFrom: o.from ? Number(o.from) : void 0,
+		yearTo: o.to ? Number(o.to) : void 0,
+		sort: o.sort
+	}), program.opts().json, formatPapers);
+});
+program.command("cite").argument("<doi>").option("-s, --style <style>", "gbt7714|gbt7714-numeric|apa|bibtex", "gbt7714").action(async (doi, o) => {
+	const style = o.style;
+	if (!CITE_STYLES.includes(style)) {
 		console.error(`unknown style: ${o.style}`);
 		process.exitCode = 2;
 		return;
@@ -48,4 +64,4 @@ function isMain() {
 if (isMain()) program.parseAsync();
 
 //#endregion
-export { formatPapers, program };
+export { CITE_STYLES, formatPapers, program };

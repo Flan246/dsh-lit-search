@@ -1,4 +1,4 @@
-import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-C_FLHpe2.js";
+import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-DHjyu7xV.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 
 //#region src/plugin.ts
@@ -15,7 +15,7 @@ const paperLines = (papers) => [{
 function apply(ctx) {
 	ctx.tools.register(defineTool({
 		name: "lit_search",
-		description: "Search academic papers on Crossref and OpenAlex by keyword. Returns merged, deduplicated results with DOI and citation counts.",
+		description: "Search academic papers on Crossref, OpenAlex and Semantic Scholar by keyword. Returns merged, deduplicated results with DOI and citation counts.",
 		parameters: {
 			query: {
 				type: "string",
@@ -25,6 +25,18 @@ function apply(ctx) {
 			limit: {
 				type: "number",
 				description: "Max results (default 10)"
+			},
+			year_from: {
+				type: "number",
+				description: "Earliest publication year"
+			},
+			year_to: {
+				type: "number",
+				description: "Latest publication year"
+			},
+			sort: {
+				type: "string",
+				description: "citations (default) | date | relevance"
 			}
 		},
 		output: {
@@ -32,12 +44,17 @@ function apply(ctx) {
 			render: (_args, v) => paperLines(v)
 		},
 		async execute(args) {
-			return asValue(await searchPapers(args.query, { limit: args.limit }));
+			return asValue(await searchPapers(args.query, {
+				limit: args.limit,
+				yearFrom: args.year_from,
+				yearTo: args.year_to,
+				sort: args.sort
+			}));
 		}
 	}));
 	ctx.tools.register(defineTool({
 		name: "lit_cite",
-		description: "Format a citation for a DOI. Styles: gbt7714 (Chinese standard), apa, bibtex.",
+		description: "Format a citation for a DOI. Styles: gbt7714 (Chinese standard), gbt7714-numeric (numbered), apa, bibtex.",
 		parameters: {
 			doi: {
 				type: "string",
@@ -46,7 +63,7 @@ function apply(ctx) {
 			},
 			style: {
 				type: "string",
-				description: "gbt7714 | apa | bibtex (default gbt7714)"
+				description: "gbt7714 | gbt7714-numeric | apa | bibtex (default gbt7714)"
 			}
 		},
 		output: {

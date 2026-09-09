@@ -9,7 +9,7 @@ interface Paper {
   year: number | null;
   venue: string | null;
   citationCount: number | null;
-  source: 'crossref' | 'openalex';
+  source: 'crossref' | 'openalex' | 'semanticscholar';
   url: string | null;
 }
 //#endregion
@@ -18,5 +18,6 @@ declare function formatPapers(papers: Paper[]): string;
 //#endregion
 //#region src/cli.d.ts
 declare const program: Command;
+declare const CITE_STYLES: string[];
 //#endregion
-export { formatPapers, program };
+export { CITE_STYLES, formatPapers, program };

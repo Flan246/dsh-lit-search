@@ -55,13 +55,13 @@ describe('searchPapers', () => {
     expect(r.data).toHaveLength(2)
   })
 
-  it('returns ALL_SOURCES_FAILED when both sources fail', async () => {
+  it('returns ALL_SOURCES_FAILED when all sources fail', async () => {
     const fetchJson = vi.fn(async () =>
       ({ ok: false as const, error: { code: 'NETWORK', message: 'down' } }))
     const r = await searchPapers('attention', {}, { fetchJson })
     expect(r).toMatchObject({
       ok: false,
-      error: { code: 'ALL_SOURCES_FAILED', message: 'both Crossref and OpenAlex are unavailable' },
+      error: { code: 'ALL_SOURCES_FAILED', message: 'Crossref, OpenAlex and Semantic Scholar are all unavailable' },
     })
   })
 

@@ -19,7 +19,7 @@ function err(code, message) {
 
 //#endregion
 //#region src/core/http.ts
-const UA = "dsh-lit-search/0.1.3 (mailto:lit-search@users.noreply.github.com)";
+const UA = "dsh-lit-search/0.2.0 (mailto:lit-search@users.noreply.github.com)";
 const TIMEOUT_MS = 1e4;
 const CACHE_TTL_MS = 5 * 6e4;
 const CACHE_MAX = 200;
@@ -113,16 +113,32 @@ async function fetchJson(url) {
 //#region src/core/search.ts
 async function searchPapers(query, opts = {}, deps = {}) {
 	const limit = opts.limit ?? 10;
+	const sort = opts.sort ?? "citations";
 	const fj = deps.fetchJson ?? fetchJson;
 	const q = encodeURIComponent(query);
-	const [cr, oa] = await Promise.all([fj(`https://api.crossref.org/works?query=${q}&rows=${limit}&select=DOI,title,author,published,container-title,is-referenced-by-count,URL`), fj(`https://api.openalex.org/works?search=${q}&per-page=${limit}`)]);
-	if (!cr.ok && !oa.ok) return err("ALL_SOURCES_FAILED", "both Crossref and OpenAlex are unavailable");
+	const crFilter = opts.yearFrom || opts.yearTo ? `&filter=${encodeURIComponent([opts.yearFrom ? `from-pub-date:${opts.yearFrom}` : "", opts.yearTo ? `until-pub-date:${opts.yearTo}` : ""].filter(Boolean).join(","))}` : "";
+	const crSort = sort === "citations" ? "&sort=is-referenced-by-count&order=desc" : sort === "date" ? "&sort=published&order=desc" : "";
+	const oaFilter = opts.yearFrom || opts.yearTo ? `&filter=${encodeURIComponent([opts.yearFrom ? `from_publication_date:${opts.yearFrom}` : "", opts.yearTo ? `to_publication_date:${opts.yearTo}` : ""].filter(Boolean).join(","))}` : "";
+	const oaSort = sort === "citations" ? "&sort=cited_by_count:desc" : sort === "date" ? "&sort=publication_date:desc" : "";
+	const s2Year = opts.yearFrom || opts.yearTo ? `&year=${opts.yearFrom ?? ""}-${opts.yearTo ?? ""}` : "";
+	const [cr, oa, s2] = await Promise.all([
+		fj(`https://api.crossref.org/works?query=${q}&rows=${limit}&select=DOI,title,author,published,container-title,is-referenced-by-count,URL${crFilter}${crSort}`),
+		fj(`https://api.openalex.org/works?search=${q}&per-page=${limit}${oaFilter}${oaSort}`),
+		fj(`https://api.semanticscholar.org/graph/v1/paper/search?query=${q}&limit=${limit}&fields=title,authors,year,venue,citationCount,externalIds${s2Year}`)
+	]);
+	if (!cr.ok && !oa.ok && !s2.ok) return err("ALL_SOURCES_FAILED", "Crossref, OpenAlex and Semantic Scholar are all unavailable");
 	const byDoi = /* @__PURE__ */ new Map();
 	if (cr.ok) for (const p of fromCrossref(cr.data)) byDoi.set(p.doi, p);
 	if (oa.ok) {
 		for (const p of fromOpenAlex(oa.data)) if (!byDoi.has(p.doi)) byDoi.set(p.doi, p);
 	}
-	return ok([...byDoi.values()].sort((a, b) => (b.citationCount ?? 0) - (a.citationCount ?? 0)).slice(0, limit));
+	if (s2.ok) {
+		for (const p of fromSemanticScholar(s2.data)) if (!byDoi.has(p.doi)) byDoi.set(p.doi, p);
+	}
+	let papers = [...byDoi.values()];
+	if (sort === "citations") papers = papers.sort((a, b) => (b.citationCount ?? 0) - (a.citationCount ?? 0));
+	else if (sort === "date") papers = papers.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
+	return ok(papers.slice(0, limit));
 }
 function fromCrossref(data) {
 	const items = data?.message?.items;
@@ -152,6 +168,20 @@ function fromOpenAlex(data) {
 		url: w.doi ?? null
 	}));
 }
+function fromSemanticScholar(data) {
+	const items = data?.data;
+	if (!Array.isArray(items)) return [];
+	return items.filter((w) => w?.externalIds?.DOI && w?.title).map((w) => ({
+		doi: String(w.externalIds.DOI).toLowerCase(),
+		title: String(w.title),
+		authors: (w.authors ?? []).map((a) => a?.name).filter(Boolean),
+		year: w.year ?? null,
+		venue: w.venue || null,
+		citationCount: w.citationCount ?? null,
+		source: "semanticscholar",
+		url: `https://doi.org/${w.externalIds.DOI}`
+	}));
+}
 
 //#endregion
 //#region src/core/cite.ts
@@ -166,6 +196,7 @@ async function citePaper(doi, style, deps = {}) {
 		w = fromOpenAlexWork(oa.data);
 	}
 	if (style === "gbt7714") return ok(gbt7714(w));
+	if (style === "gbt7714-numeric") return ok(`[1] ${gbt7714(w)}`);
 	if (style === "apa") return ok(apa(w));
 	return ok(bibtex(w));
 }
@@ -186,6 +217,34 @@ function preprintServer(rawVenue) {
 	if (!hit) return null;
 	return hit === "arxiv" ? "arXiv" : v;
 }
+const PARTICLES = new Set([
+	"de",
+	"van",
+	"von",
+	"der",
+	"den",
+	"di",
+	"da",
+	"del",
+	"della",
+	"las",
+	"le",
+	"bin",
+	"ibn"
+]);
+function splitDisplayName(name) {
+	const words = name.trim().split(/\s+/).filter(Boolean);
+	if (words.length < 2) return {
+		family: name.trim(),
+		given: ""
+	};
+	let i = words.length - 1;
+	while (i > 0 && PARTICLES.has(words[i - 1].toLowerCase())) i--;
+	return {
+		family: words.slice(i).join(" "),
+		given: words.slice(0, i).join(" ")
+	};
+}
 function fromOpenAlexWork(w) {
 	const rawVenue = w.primary_location?.source?.display_name ?? "";
 	const server = preprintServer(rawVenue);
@@ -193,13 +252,7 @@ function fromOpenAlexWork(w) {
 	return {
 		DOI: String(w.doi ?? "").replace(/^https?:\/\/doi\.org\//i, ""),
 		title: [w.title ?? ""],
-		author: (w.authorships ?? []).map((a) => {
-			const parts = String(a.author?.display_name ?? "").trim().split(/\s+/).filter(Boolean);
-			return {
-				family: parts.pop() ?? "",
-				given: parts.join(" ")
-			};
-		}),
+		author: (w.authorships ?? []).map((a) => splitDisplayName(String(a.author?.display_name ?? ""))),
 		published: { "date-parts": [[w.publication_year ?? ""]] },
 		"container-title": venue ? [venue] : void 0,
 		type: venue ? "journal-article" : "posted-content",
@@ -242,7 +295,7 @@ function apa(w) {
 	const fmt = (n) => [n.family, n.given.split(/\s+/).filter(Boolean).map((s) => s[0] + ".").join(" ")].filter(Boolean).join(", ");
 	const head = ns.slice(0, 3).map(fmt).filter(Boolean).join(", ");
 	const authors = ns.length > 3 ? `${head}, et al.` : head;
-	const year = w.published?.["date-parts"]?.[0]?.[0] ?? "n.d.";
+	const year = w.published?.["date-parts"]?.[0]?.[0] || "n.d.";
 	const venue = w["container-title"]?.[0] ?? w.publisher ?? "";
 	return [
 		`${authors ? `${authors} ` : ""}(${year}). ${w.title?.[0] ?? ""}.`,
@@ -257,7 +310,7 @@ function bibtex(w) {
 	const key = `${ns[0]?.family.toLowerCase() ?? "unknown"}${year}${firstWord}`;
 	const entryType = w.type === "journal-article" ? "article" : w.type === "proceedings-article" ? "inproceedings" : "misc";
 	return `@${entryType}{${key},\n${[
-		`  author = {${ns.map((n) => `${n.family}, ${n.given}`.trimEnd()).join(" and ")}}`,
+		`  author = {${ns.map((n) => [n.family, n.given].filter(Boolean).join(", ")).join(" and ")}}`,
 		`  title = {${w.title?.[0] ?? ""}}`,
 		w["container-title"]?.[0] ? `  ${entryType === "article" ? "journal" : "booktitle"} = {${w["container-title"][0]}}` : null,
 		year ? `  year = {${year}}` : null,
