@@ -42,11 +42,10 @@ describe('plugin', () => {
 })
 
 describe('lit_search sort whitelist', () => {
-  it('returns INVALID_SORT without calling searchPapers on unknown sort', async () => {
+  it('throws unknown sort without calling searchPapers', async () => {
     vi.mocked(searchPapers).mockClear()
     const t = registeredTools().get('lit_search')
-    const r = await t.execute({ query: 'x', sort: 'banana' })
-    expect(r).toMatchObject({ error: { code: 'INVALID_SORT' } })
+    await expect(t.execute({ query: 'x', sort: 'banana' })).rejects.toThrow('unknown sort: banana')
     expect(searchPapers).not.toHaveBeenCalled()
   })
 

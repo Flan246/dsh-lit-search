@@ -49,10 +49,7 @@ function apply(ctx) {
 			render: (_args, v) => paperLines(v)
 		},
 		async execute(args) {
-			if (args.sort !== void 0 && !SEARCH_SORTS.includes(args.sort)) return { error: {
-				code: "INVALID_SORT",
-				message: `unknown sort: ${args.sort} (expected citations | date | relevance)`
-			} };
+			if (args.sort !== void 0 && !SEARCH_SORTS.includes(args.sort)) throw new Error(`unknown sort: ${args.sort}（citations | date | relevance）`);
 			return asValue(await searchPapers(args.query, {
 				limit: args.limit,
 				yearFrom: args.year_from,

@@ -41,10 +41,11 @@ export function apply(ctx: Context) {
       render: (_args, v: any) => paperLines(v as Paper[]),
     },
     async execute(args) {
-      // Align with the CLI: reject unknown sort values before hitting the
-      // network instead of silently treating them as 'relevance'.
+      // Align with the CLI and the "throw for failures" tool contract:
+      // reject unknown sort values before hitting the network. Returning an
+      // { error } object would violate output.schema's array root type.
       if (args.sort !== undefined && !SEARCH_SORTS.includes(args.sort as SearchSort)) {
-        return { error: { code: 'INVALID_SORT', message: `unknown sort: ${args.sort} (expected citations | date | relevance)` } }
+        throw new Error(`unknown sort: ${args.sort}（citations | date | relevance）`)
       }
       return asValue(await searchPapers(args.query, {
         limit: args.limit,
