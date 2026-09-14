@@ -41,6 +41,25 @@ describe('plugin', () => {
   })
 })
 
+describe('lit_search sort whitelist', () => {
+  it('returns INVALID_SORT without calling searchPapers on unknown sort', async () => {
+    vi.mocked(searchPapers).mockClear()
+    const t = registeredTools().get('lit_search')
+    const r = await t.execute({ query: 'x', sort: 'banana' })
+    expect(r).toMatchObject({ error: { code: 'INVALID_SORT' } })
+    expect(searchPapers).not.toHaveBeenCalled()
+  })
+
+  it.each(['citations', 'date', 'relevance'])('passes valid sort %s through', async (sort) => {
+    vi.mocked(searchPapers).mockClear()
+    vi.mocked(searchPapers).mockResolvedValue({ ok: true, data: [] })
+    const t = registeredTools().get('lit_search')
+    const r = await t.execute({ query: 'x', sort })
+    expect(r).toEqual([])
+    expect(vi.mocked(searchPapers).mock.calls[0][1]).toMatchObject({ sort })
+  })
+})
+
 // 业务失败按官方契约 throw：注册表捕获后走 error-result 路径，
 // 真实 message 带给 agent，且不与 output.schema 根类型冲突。
 describe('tool execute throws on business failure', () => {

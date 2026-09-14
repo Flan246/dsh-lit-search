@@ -1,4 +1,5 @@
 import { fetchJson as defaultFetchJson } from './http.js'
+import { decodeEntities } from './cite.js'
 import { err, ok, type Paper, type Result } from './types.js'
 
 export interface SearchOptions {
@@ -67,7 +68,7 @@ function fromCrossref(data: any): Paper[] {
     title: String(w.title[0]),
     authors: (w.author ?? []).map((a: any) => [a.given, a.family].filter(Boolean).join(' ')),
     year: w.published?.['date-parts']?.[0]?.[0] ?? null,
-    venue: w['container-title']?.[0] ?? null,
+    venue: w['container-title']?.[0] ? decodeEntities(String(w['container-title'][0])) : null,
     citationCount: w['is-referenced-by-count'] ?? null,
     source: 'crossref',
     url: w.URL ?? null,
@@ -82,7 +83,8 @@ function fromOpenAlex(data: any): Paper[] {
     title: String(w.title),
     authors: (w.authorships ?? []).map((a: any) => a?.author?.display_name).filter(Boolean),
     year: w.publication_year ?? null,
-    venue: w.primary_location?.source?.display_name ?? null,
+    venue: w.primary_location?.source?.display_name
+      ? decodeEntities(String(w.primary_location.source.display_name)) : null,
     citationCount: w.cited_by_count ?? null,
     source: 'openalex',
     url: w.doi ?? null,
@@ -99,7 +101,7 @@ function fromSemanticScholar(data: any): Paper[] {
       title: String(w.title),
       authors: (w.authors ?? []).map((a: any) => a?.name).filter(Boolean),
       year: w.year ?? null,
-      venue: w.venue || null,
+      venue: w.venue ? decodeEntities(String(w.venue)) : null,
       citationCount: w.citationCount ?? null,
       source: 'semanticscholar',
       url: `https://doi.org/${w.externalIds.DOI}`,

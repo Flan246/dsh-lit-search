@@ -243,6 +243,57 @@ describe('0.2.0 fixes', () => {
   })
 })
 
+describe('0.2.1 fixes', () => {
+  const fallbackFetch = (oaData?: unknown) =>
+    vi.fn(async (url: string) => {
+      if (url.includes('crossref.org')) return err('NOT_FOUND', '404: crossref')
+      if (url.includes('openalex.org')) return oaData ? ok(oaData) : err('NOT_FOUND', '404: openalex')
+      throw new Error(`unexpected url ${url}`)
+    })
+
+  it('bibtex key strips spaces from multi-word family names', async () => {
+    const oaWork = {
+      title: 'Some Paper', publication_year: 2020,
+      authorships: [{ author: { display_name: 'Diego de Las Casas' } }],
+      primary_location: { source: null }, cited_by_count: 1, doi: 'https://doi.org/10.9/x',
+    }
+    const r = await citePaper('10.9/x', 'bibtex', { fetchJson: fallbackFetch(oaWork) })
+    expect(r.ok && r.data).toContain('@misc{delascasas2020some')
+    expect(r.ok && r.data.split('\n')[0]).not.toMatch(/\s/)
+  })
+
+  it('decodes HTML entities in venue and title (Crossref path)', async () => {
+    const crWork = {
+      message: {
+        DOI: '10.1000/amp', title: ['Fish &amp; Chips: A Study'],
+        author: [{ given: 'Ann', family: 'Lee' }],
+        published: { 'date-parts': [[2021]] },
+        'container-title': ['A &amp; B Journal'], type: 'journal-article',
+      },
+    }
+    const fetchJson = vi.fn(async () => ok(crWork))
+    const gbt = await citePaper('10.1000/amp', 'gbt7714', { fetchJson })
+    expect(gbt.ok && gbt.data).toContain('A & B Journal')
+    expect(gbt.ok && gbt.data).toContain('Fish & Chips: A Study')
+    expect(gbt.ok && gbt.data).not.toContain('&amp;')
+    const bib = await citePaper('10.1000/amp', 'bibtex', { fetchJson })
+    expect(bib.ok && bib.data).toContain('journal = {A & B Journal}')
+    expect(bib.ok && bib.data).toContain('title = {Fish & Chips: A Study}')
+  })
+
+  it('decodes HTML entities in venue and title (OpenAlex path)', async () => {
+    const oaWork = {
+      title: 'Cats &lt; Dogs &gt; Mice', publication_year: 2022,
+      authorships: [{ author: { display_name: 'Jane Smith' } }],
+      primary_location: { source: { display_name: 'A &amp; B Journal' } },
+      cited_by_count: 2, doi: 'https://doi.org/10.9/y',
+    }
+    const gbt = await citePaper('10.9/y', 'gbt7714', { fetchJson: fallbackFetch(oaWork) })
+    expect(gbt.ok && gbt.data).toContain('A & B Journal')
+    expect(gbt.ok && gbt.data).toContain('Cats < Dogs > Mice')
+  })
+})
+
 describe('openalex author name splitting', () => {
   // 经 lit_related / 回退路径的 OpenAlex work 会走 names() 拆分
   it('keeps nobility particles in family name', async () => {

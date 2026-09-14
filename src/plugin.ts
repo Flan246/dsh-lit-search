@@ -22,6 +22,9 @@ const asValue = <T,>(r: Result<T>): any => {
 
 const paperLines = (papers: Paper[]) => [{ type: 'text' as const, text: formatPapers(papers) }]
 
+const SEARCH_SORTS = ['citations', 'date', 'relevance'] as const
+type SearchSort = (typeof SEARCH_SORTS)[number]
+
 export function apply(ctx: Context) {
   ctx.tools.register(defineTool({
     name: 'lit_search',
@@ -38,11 +41,16 @@ export function apply(ctx: Context) {
       render: (_args, v: any) => paperLines(v as Paper[]),
     },
     async execute(args) {
+      // Align with the CLI: reject unknown sort values before hitting the
+      // network instead of silently treating them as 'relevance'.
+      if (args.sort !== undefined && !SEARCH_SORTS.includes(args.sort as SearchSort)) {
+        return { error: { code: 'INVALID_SORT', message: `unknown sort: ${args.sort} (expected citations | date | relevance)` } }
+      }
       return asValue(await searchPapers(args.query, {
         limit: args.limit,
         yearFrom: args.year_from,
         yearTo: args.year_to,
-        sort: args.sort as 'citations' | 'date' | 'relevance' | undefined,
+        sort: args.sort as SearchSort | undefined,
       }))
     },
   }))

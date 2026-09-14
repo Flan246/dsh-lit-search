@@ -35,6 +35,11 @@ program.command('search').argument('<query>').option('-n, --limit <n>', 'max res
     if (!['citations', 'date', 'relevance'].includes(o.sort)) {
       console.error(`unknown sort: ${o.sort}`); process.exitCode = 2; return
     }
+    for (const v of [o.from, o.to]) {
+      if (v !== undefined && !Number.isFinite(Number(v))) {
+        console.error(`invalid year: ${v}`); process.exitCode = 2; return
+      }
+    }
     print(await searchPapers(query, {
       limit: Number(o.limit),
       yearFrom: o.from ? Number(o.from) : undefined,

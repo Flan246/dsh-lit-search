@@ -132,3 +132,38 @@ describe('searchPapers filters, sort and third source', () => {
     expect(r).toMatchObject({ ok: false, error: { code: 'ALL_SOURCES_FAILED' } })
   })
 })
+
+describe('0.2.1 venue entity decoding', () => {
+  it('decodes HTML entities in crossref venue', async () => {
+    const payload = {
+      message: {
+        items: [{
+          DOI: '10.1/ent', title: ['T'],
+          author: [{ given: 'A', family: 'B' }],
+          published: { 'date-parts': [[2020]] },
+          'container-title': ['A &amp; B Journal'], 'is-referenced-by-count': 1,
+          URL: 'https://doi.org/10.1/ent',
+        }],
+      },
+    }
+    const fetchJson = vi.fn(async (url: string) =>
+      url.includes('crossref') ? ok(payload) : ok({ results: [], data: [] }))
+    const r = await searchPapers('x', {}, { fetchJson })
+    expect(r.ok && r.data[0]?.venue).toBe('A & B Journal')
+  })
+
+  it('decodes HTML entities in openalex venue', async () => {
+    const payload = {
+      results: [{
+        doi: 'https://doi.org/10.1/ent2', title: 'T2', authorships: [],
+        publication_year: 2021,
+        primary_location: { source: { display_name: 'X &amp; Y Review' } },
+        cited_by_count: 2,
+      }],
+    }
+    const fetchJson = vi.fn(async (url: string) =>
+      url.includes('openalex') ? ok(payload) : ok({ message: { items: [] }, data: [] }))
+    const r = await searchPapers('x', {}, { fetchJson })
+    expect(r.ok && r.data[0]?.venue).toBe('X & Y Review')
+  })
+})

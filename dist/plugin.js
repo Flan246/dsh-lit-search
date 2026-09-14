@@ -1,4 +1,4 @@
-import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-DHjyu7xV.js";
+import { a as citePaper, i as searchPapers, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-DKezCQiV.js";
 import { defineTool } from "@deepseek-ai/dsh-tools";
 
 //#region src/plugin.ts
@@ -12,6 +12,11 @@ const paperLines = (papers) => [{
 	type: "text",
 	text: formatPapers(papers)
 }];
+const SEARCH_SORTS = [
+	"citations",
+	"date",
+	"relevance"
+];
 function apply(ctx) {
 	ctx.tools.register(defineTool({
 		name: "lit_search",
@@ -44,6 +49,10 @@ function apply(ctx) {
 			render: (_args, v) => paperLines(v)
 		},
 		async execute(args) {
+			if (args.sort !== void 0 && !SEARCH_SORTS.includes(args.sort)) return { error: {
+				code: "INVALID_SORT",
+				message: `unknown sort: ${args.sort} (expected citations | date | relevance)`
+			} };
 			return asValue(await searchPapers(args.query, {
 				limit: args.limit,
 				yearFrom: args.year_from,

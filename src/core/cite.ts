@@ -4,6 +4,16 @@ import { ok, type Result } from './types.js'
 export type CiteStyle = 'gbt7714' | 'gbt7714-numeric' | 'apa' | 'bibtex'
 interface Deps { fetchJson?: typeof defaultFetchJson }
 
+// Crossref/OpenAlex occasionally ship HTML entities in title/venue strings
+// ("A &amp; B Journal"). Single-pass replace so "&amp;lt;" decodes to "&lt;",
+// not "<" (no double-decoding).
+const ENTITY_MAP: Record<string, string> = {
+  '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'",
+}
+export function decodeEntities(s: string): string {
+  return s.replace(/&(amp|lt|gt|quot|#39);/g, (m) => ENTITY_MAP[m] ?? m)
+}
+
 export async function citePaper(
   doi: string,
   style: CiteStyle,
@@ -20,6 +30,10 @@ export async function citePaper(
     const oa = await fj(`https://api.openalex.org/works/doi:${encodeURIComponent(doi)}`)
     if (!oa.ok) return oa
     w = fromOpenAlexWork(oa.data)
+  }
+  if (Array.isArray(w.title)) w.title = w.title.map((t: string) => decodeEntities(String(t)))
+  if (Array.isArray(w['container-title'])) {
+    w['container-title'] = w['container-title'].map((t: string) => decodeEntities(String(t)))
   }
   if (style === 'gbt7714') return ok(gbt7714(w))
   if (style === 'gbt7714-numeric') return ok(`[1] ${gbt7714(w)}`)
@@ -140,7 +154,7 @@ function bibtex(w: any): string {
   const ns = names(w)
   const year = w.published?.['date-parts']?.[0]?.[0] ?? ''
   const firstWord = String(w.title?.[0] ?? 'untitled').split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, '')
-  const key = `${ns[0]?.family.toLowerCase() ?? 'unknown'}${year}${firstWord}`
+  const key = `${ns[0]?.family.toLowerCase().replace(/\s+/g, '') ?? 'unknown'}${year}${firstWord}`
   const entryType = w.type === 'journal-article' ? 'article'
     : w.type === 'proceedings-article' ? 'inproceedings' : 'misc'
   const lines = [

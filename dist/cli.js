@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { a as searchPapers, i as citePaper, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-DHjyu7xV.js";
+import { a as citePaper, i as searchPapers, n as relatedPapers, r as bibEntries, t as formatPapers } from "./format-DKezCQiV.js";
 import { realpathSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Command } from "commander";
@@ -28,6 +28,11 @@ program.command("search").argument("<query>").option("-n, --limit <n>", "max res
 		"relevance"
 	].includes(o.sort)) {
 		console.error(`unknown sort: ${o.sort}`);
+		process.exitCode = 2;
+		return;
+	}
+	for (const v of [o.from, o.to]) if (v !== void 0 && !Number.isFinite(Number(v))) {
+		console.error(`invalid year: ${v}`);
 		process.exitCode = 2;
 		return;
 	}

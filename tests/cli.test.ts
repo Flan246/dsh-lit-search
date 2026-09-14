@@ -37,6 +37,39 @@ describe('global --json option', () => {
   })
 })
 
+describe('0.2.1 cli year validation', () => {
+  it('rejects --from abc with exitCode 2 and does not search', async () => {
+    const { searchPapers } = await import('../src/core/search.js')
+    vi.mocked(searchPapers).mockClear()
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const prevCode = process.exitCode
+    try {
+      program.exitOverride()
+      await program.parseAsync(['search', 'q', '--from', 'abc'], { from: 'user' })
+      expect(process.exitCode).toBe(2)
+      expect(errSpy).toHaveBeenCalledWith('invalid year: abc')
+      expect(searchPapers).not.toHaveBeenCalled()
+    } finally {
+      errSpy.mockRestore()
+      process.exitCode = prevCode
+    }
+  })
+
+  it('rejects --to 20x1 with exitCode 2', async () => {
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const prevCode = process.exitCode
+    try {
+      program.exitOverride()
+      await program.parseAsync(['search', 'q', '--to', '20x1'], { from: 'user' })
+      expect(process.exitCode).toBe(2)
+      expect(errSpy).toHaveBeenCalledWith('invalid year: 20x1')
+    } finally {
+      errSpy.mockRestore()
+      process.exitCode = prevCode
+    }
+  })
+})
+
 describe('0.2.0 cli params', () => {
   it('search defines --from/--to/--sort options', async () => {
     const { program } = await import('../src/cli.js')

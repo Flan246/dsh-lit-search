@@ -180,6 +180,42 @@ describe('429 backoff', () => {
     expect(first.body.cancel).toHaveBeenCalledTimes(1)
   })
 
+  it('caps the Retry-After wait at 5s', async () => {
+    vi.useFakeTimers()
+    try {
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+      mockFetch
+        .mockResolvedValueOnce(fake429({ 'Retry-After': '30' }) as never)
+        .mockResolvedValueOnce(jsonResponse({ a: 6 }) as never)
+      const p = fetchJson('https://example.com/rl-cap')
+      await vi.advanceTimersByTimeAsync(5000)
+      const r = await p
+      expect(r).toEqual({ ok: true, data: { a: 6 } })
+      expect(mockFetch).toHaveBeenCalledTimes(2)
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 5000)
+      expect(setTimeoutSpy).not.toHaveBeenCalledWith(expect.any(Function), 30000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('still accepts Retry-After values below the 5s cap unchanged', async () => {
+    vi.useFakeTimers()
+    try {
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+      mockFetch
+        .mockResolvedValueOnce(fake429({ 'Retry-After': '2' }) as never)
+        .mockResolvedValueOnce(jsonResponse({ a: 7 }) as never)
+      const p = fetchJson('https://example.com/rl-under-cap')
+      await vi.advanceTimersByTimeAsync(2000)
+      const r = await p
+      expect(r).toEqual({ ok: true, data: { a: 7 } })
+      expect(setTimeoutSpy).toHaveBeenCalledWith(expect.any(Function), 2000)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('defaults to 1s backoff when Retry-After header is missing', async () => {
     vi.useFakeTimers()
     try {

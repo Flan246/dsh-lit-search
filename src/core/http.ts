@@ -1,7 +1,7 @@
 import { fetch, ProxyAgent, type RequestInit as UndiciRequestInit } from 'undici'
 import { err, ok, type Result } from './types.js'
 
-const UA = 'dsh-lit-search/0.2.0 (mailto:lit-search@users.noreply.github.com)'
+const UA = 'dsh-lit-search/0.2.1 (mailto:lit-search@users.noreply.github.com)'
 const TIMEOUT_MS = 10_000
 const CACHE_TTL_MS = 5 * 60_000
 const CACHE_MAX = 200
@@ -81,7 +81,9 @@ export async function fetchJson(url: string): Promise<Result<unknown>> {
           let waitSec = 1
           if (ra !== null) {
             const parsed = Number(ra)
-            if (Number.isFinite(parsed) && parsed >= 0) waitSec = parsed
+            // Cap the wait: S2 rate limiting can advertise long Retry-After
+            // values that would stall an agent loop for minutes.
+            if (Number.isFinite(parsed) && parsed >= 0) waitSec = Math.min(parsed, 5)
           }
           await sleep(waitSec * 1000)
           continue

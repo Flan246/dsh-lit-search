@@ -19,7 +19,7 @@ function err(code, message) {
 
 //#endregion
 //#region src/core/http.ts
-const UA = "dsh-lit-search/0.2.0 (mailto:lit-search@users.noreply.github.com)";
+const UA = "dsh-lit-search/0.2.1 (mailto:lit-search@users.noreply.github.com)";
 const TIMEOUT_MS = 1e4;
 const CACHE_TTL_MS = 5 * 6e4;
 const CACHE_MAX = 200;
@@ -87,7 +87,7 @@ async function fetchJson(url) {
 				let waitSec = 1;
 				if (ra !== null) {
 					const parsed = Number(ra);
-					if (Number.isFinite(parsed) && parsed >= 0) waitSec = parsed;
+					if (Number.isFinite(parsed) && parsed >= 0) waitSec = Math.min(parsed, 5);
 				}
 				await sleep(waitSec * 1e3);
 				continue;
@@ -110,81 +110,17 @@ async function fetchJson(url) {
 }
 
 //#endregion
-//#region src/core/search.ts
-async function searchPapers(query, opts = {}, deps = {}) {
-	const limit = opts.limit ?? 10;
-	const sort = opts.sort ?? "citations";
-	const fj = deps.fetchJson ?? fetchJson;
-	const q = encodeURIComponent(query);
-	const crFilter = opts.yearFrom || opts.yearTo ? `&filter=${encodeURIComponent([opts.yearFrom ? `from-pub-date:${opts.yearFrom}` : "", opts.yearTo ? `until-pub-date:${opts.yearTo}` : ""].filter(Boolean).join(","))}` : "";
-	const crSort = sort === "citations" ? "&sort=is-referenced-by-count&order=desc" : sort === "date" ? "&sort=published&order=desc" : "";
-	const oaFilter = opts.yearFrom || opts.yearTo ? `&filter=${encodeURIComponent([opts.yearFrom ? `from_publication_date:${opts.yearFrom}` : "", opts.yearTo ? `to_publication_date:${opts.yearTo}` : ""].filter(Boolean).join(","))}` : "";
-	const oaSort = sort === "citations" ? "&sort=cited_by_count:desc" : sort === "date" ? "&sort=publication_date:desc" : "";
-	const s2Year = opts.yearFrom || opts.yearTo ? `&year=${opts.yearFrom ?? ""}-${opts.yearTo ?? ""}` : "";
-	const [cr, oa, s2] = await Promise.all([
-		fj(`https://api.crossref.org/works?query=${q}&rows=${limit}&select=DOI,title,author,published,container-title,is-referenced-by-count,URL${crFilter}${crSort}`),
-		fj(`https://api.openalex.org/works?search=${q}&per-page=${limit}${oaFilter}${oaSort}`),
-		fj(`https://api.semanticscholar.org/graph/v1/paper/search?query=${q}&limit=${limit}&fields=title,authors,year,venue,citationCount,externalIds${s2Year}`)
-	]);
-	if (!cr.ok && !oa.ok && !s2.ok) return err("ALL_SOURCES_FAILED", "Crossref, OpenAlex and Semantic Scholar are all unavailable");
-	const byDoi = /* @__PURE__ */ new Map();
-	if (cr.ok) for (const p of fromCrossref(cr.data)) byDoi.set(p.doi, p);
-	if (oa.ok) {
-		for (const p of fromOpenAlex(oa.data)) if (!byDoi.has(p.doi)) byDoi.set(p.doi, p);
-	}
-	if (s2.ok) {
-		for (const p of fromSemanticScholar(s2.data)) if (!byDoi.has(p.doi)) byDoi.set(p.doi, p);
-	}
-	let papers = [...byDoi.values()];
-	if (sort === "citations") papers = papers.sort((a, b) => (b.citationCount ?? 0) - (a.citationCount ?? 0));
-	else if (sort === "date") papers = papers.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
-	return ok(papers.slice(0, limit));
-}
-function fromCrossref(data) {
-	const items = data?.message?.items;
-	if (!Array.isArray(items)) return [];
-	return items.filter((w) => w?.DOI && w?.title?.[0]).map((w) => ({
-		doi: String(w.DOI).toLowerCase(),
-		title: String(w.title[0]),
-		authors: (w.author ?? []).map((a) => [a.given, a.family].filter(Boolean).join(" ")),
-		year: w.published?.["date-parts"]?.[0]?.[0] ?? null,
-		venue: w["container-title"]?.[0] ?? null,
-		citationCount: w["is-referenced-by-count"] ?? null,
-		source: "crossref",
-		url: w.URL ?? null
-	}));
-}
-function fromOpenAlex(data) {
-	const items = data?.results;
-	if (!Array.isArray(items)) return [];
-	return items.filter((w) => w?.doi && w?.title).map((w) => ({
-		doi: String(w.doi).replace(/^https?:\/\/doi\.org\//i, "").toLowerCase(),
-		title: String(w.title),
-		authors: (w.authorships ?? []).map((a) => a?.author?.display_name).filter(Boolean),
-		year: w.publication_year ?? null,
-		venue: w.primary_location?.source?.display_name ?? null,
-		citationCount: w.cited_by_count ?? null,
-		source: "openalex",
-		url: w.doi ?? null
-	}));
-}
-function fromSemanticScholar(data) {
-	const items = data?.data;
-	if (!Array.isArray(items)) return [];
-	return items.filter((w) => w?.externalIds?.DOI && w?.title).map((w) => ({
-		doi: String(w.externalIds.DOI).toLowerCase(),
-		title: String(w.title),
-		authors: (w.authors ?? []).map((a) => a?.name).filter(Boolean),
-		year: w.year ?? null,
-		venue: w.venue || null,
-		citationCount: w.citationCount ?? null,
-		source: "semanticscholar",
-		url: `https://doi.org/${w.externalIds.DOI}`
-	}));
-}
-
-//#endregion
 //#region src/core/cite.ts
+const ENTITY_MAP = {
+	"&amp;": "&",
+	"&lt;": "<",
+	"&gt;": ">",
+	"&quot;": "\"",
+	"&#39;": "'"
+};
+function decodeEntities(s) {
+	return s.replace(/&(amp|lt|gt|quot|#39);/g, (m) => ENTITY_MAP[m] ?? m);
+}
 async function citePaper(doi, style, deps = {}) {
 	const fj = deps.fetchJson ?? fetchJson;
 	const r = await fj(`https://api.crossref.org/works/${encodeURIComponent(doi)}`);
@@ -195,6 +131,8 @@ async function citePaper(doi, style, deps = {}) {
 		if (!oa.ok) return oa;
 		w = fromOpenAlexWork(oa.data);
 	}
+	if (Array.isArray(w.title)) w.title = w.title.map((t) => decodeEntities(String(t)));
+	if (Array.isArray(w["container-title"])) w["container-title"] = w["container-title"].map((t) => decodeEntities(String(t)));
 	if (style === "gbt7714") return ok(gbt7714(w));
 	if (style === "gbt7714-numeric") return ok(`[1] ${gbt7714(w)}`);
 	if (style === "apa") return ok(apa(w));
@@ -307,7 +245,7 @@ function bibtex(w) {
 	const ns = names(w);
 	const year = w.published?.["date-parts"]?.[0]?.[0] ?? "";
 	const firstWord = String(w.title?.[0] ?? "untitled").split(/\s+/)[0].toLowerCase().replace(/[^a-z]/g, "");
-	const key = `${ns[0]?.family.toLowerCase() ?? "unknown"}${year}${firstWord}`;
+	const key = `${ns[0]?.family.toLowerCase().replace(/\s+/g, "") ?? "unknown"}${year}${firstWord}`;
 	const entryType = w.type === "journal-article" ? "article" : w.type === "proceedings-article" ? "inproceedings" : "misc";
 	return `@${entryType}{${key},\n${[
 		`  author = {${ns.map((n) => [n.family, n.given].filter(Boolean).join(", ")).join(" and ")}}`,
@@ -319,6 +257,80 @@ function bibtex(w) {
 		w.type === "posted-content" && !w["container-title"]?.[0] ? `  howpublished = {${w["preprint-server"] ?? "arXiv"} preprint}` : null,
 		`  doi = {${w.DOI}}`
 	].filter(Boolean).join(",\n")}\n}`;
+}
+
+//#endregion
+//#region src/core/search.ts
+async function searchPapers(query, opts = {}, deps = {}) {
+	const limit = opts.limit ?? 10;
+	const sort = opts.sort ?? "citations";
+	const fj = deps.fetchJson ?? fetchJson;
+	const q = encodeURIComponent(query);
+	const crFilter = opts.yearFrom || opts.yearTo ? `&filter=${encodeURIComponent([opts.yearFrom ? `from-pub-date:${opts.yearFrom}` : "", opts.yearTo ? `until-pub-date:${opts.yearTo}` : ""].filter(Boolean).join(","))}` : "";
+	const crSort = sort === "citations" ? "&sort=is-referenced-by-count&order=desc" : sort === "date" ? "&sort=published&order=desc" : "";
+	const oaFilter = opts.yearFrom || opts.yearTo ? `&filter=${encodeURIComponent([opts.yearFrom ? `from_publication_date:${opts.yearFrom}` : "", opts.yearTo ? `to_publication_date:${opts.yearTo}` : ""].filter(Boolean).join(","))}` : "";
+	const oaSort = sort === "citations" ? "&sort=cited_by_count:desc" : sort === "date" ? "&sort=publication_date:desc" : "";
+	const s2Year = opts.yearFrom || opts.yearTo ? `&year=${opts.yearFrom ?? ""}-${opts.yearTo ?? ""}` : "";
+	const [cr, oa, s2] = await Promise.all([
+		fj(`https://api.crossref.org/works?query=${q}&rows=${limit}&select=DOI,title,author,published,container-title,is-referenced-by-count,URL${crFilter}${crSort}`),
+		fj(`https://api.openalex.org/works?search=${q}&per-page=${limit}${oaFilter}${oaSort}`),
+		fj(`https://api.semanticscholar.org/graph/v1/paper/search?query=${q}&limit=${limit}&fields=title,authors,year,venue,citationCount,externalIds${s2Year}`)
+	]);
+	if (!cr.ok && !oa.ok && !s2.ok) return err("ALL_SOURCES_FAILED", "Crossref, OpenAlex and Semantic Scholar are all unavailable");
+	const byDoi = /* @__PURE__ */ new Map();
+	if (cr.ok) for (const p of fromCrossref(cr.data)) byDoi.set(p.doi, p);
+	if (oa.ok) {
+		for (const p of fromOpenAlex(oa.data)) if (!byDoi.has(p.doi)) byDoi.set(p.doi, p);
+	}
+	if (s2.ok) {
+		for (const p of fromSemanticScholar(s2.data)) if (!byDoi.has(p.doi)) byDoi.set(p.doi, p);
+	}
+	let papers = [...byDoi.values()];
+	if (sort === "citations") papers = papers.sort((a, b) => (b.citationCount ?? 0) - (a.citationCount ?? 0));
+	else if (sort === "date") papers = papers.sort((a, b) => (b.year ?? 0) - (a.year ?? 0));
+	return ok(papers.slice(0, limit));
+}
+function fromCrossref(data) {
+	const items = data?.message?.items;
+	if (!Array.isArray(items)) return [];
+	return items.filter((w) => w?.DOI && w?.title?.[0]).map((w) => ({
+		doi: String(w.DOI).toLowerCase(),
+		title: String(w.title[0]),
+		authors: (w.author ?? []).map((a) => [a.given, a.family].filter(Boolean).join(" ")),
+		year: w.published?.["date-parts"]?.[0]?.[0] ?? null,
+		venue: w["container-title"]?.[0] ? decodeEntities(String(w["container-title"][0])) : null,
+		citationCount: w["is-referenced-by-count"] ?? null,
+		source: "crossref",
+		url: w.URL ?? null
+	}));
+}
+function fromOpenAlex(data) {
+	const items = data?.results;
+	if (!Array.isArray(items)) return [];
+	return items.filter((w) => w?.doi && w?.title).map((w) => ({
+		doi: String(w.doi).replace(/^https?:\/\/doi\.org\//i, "").toLowerCase(),
+		title: String(w.title),
+		authors: (w.authorships ?? []).map((a) => a?.author?.display_name).filter(Boolean),
+		year: w.publication_year ?? null,
+		venue: w.primary_location?.source?.display_name ? decodeEntities(String(w.primary_location.source.display_name)) : null,
+		citationCount: w.cited_by_count ?? null,
+		source: "openalex",
+		url: w.doi ?? null
+	}));
+}
+function fromSemanticScholar(data) {
+	const items = data?.data;
+	if (!Array.isArray(items)) return [];
+	return items.filter((w) => w?.externalIds?.DOI && w?.title).map((w) => ({
+		doi: String(w.externalIds.DOI).toLowerCase(),
+		title: String(w.title),
+		authors: (w.authors ?? []).map((a) => a?.name).filter(Boolean),
+		year: w.year ?? null,
+		venue: w.venue ? decodeEntities(String(w.venue)) : null,
+		citationCount: w.citationCount ?? null,
+		source: "semanticscholar",
+		url: `https://doi.org/${w.externalIds.DOI}`
+	}));
 }
 
 //#endregion
@@ -369,4 +381,4 @@ function formatPapers(papers) {
 }
 
 //#endregion
-export { searchPapers as a, citePaper as i, relatedPapers as n, bibEntries as r, formatPapers as t };
+export { citePaper as a, searchPapers as i, relatedPapers as n, bibEntries as r, formatPapers as t };
