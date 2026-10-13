@@ -1,6 +1,6 @@
 {
   "name": "dsh-lit-search",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Academic literature search, citation and BibTeX tools for DeepSeek Harness and any agent (Crossref + OpenAlex + Semantic Scholar).",
   "license": "MIT",
   "repository": {
@@ -18,6 +18,12 @@
     "semantic-scholar"
   ],
   "type": "module",
+  "exports": {
+    ".": { "types": "./dist/plugin.d.ts", "default": "./dist/plugin.js" },
+    "./core": { "types": "./dist/core/index.d.ts", "default": "./dist/core/index.js" },
+    "./dist/*": "./dist/*",
+    "./package.json": "./package.json"
+  },
   "main": "./dist/plugin.js",
   "types": "./dist/plugin.d.ts",
   "bin": {

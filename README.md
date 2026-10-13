@@ -64,3 +64,15 @@ layer with a 10s timeout, one retry on 5xx/network errors, and a polite
 ## License
 
 MIT
+
+## MCP server (Claude Code, Cursor, ChatGPT, ...)
+
+Use dsh-lit-search from any MCP host via the companion package
+[`dsh-lit-search-mcp`](https://www.npmjs.com/package/dsh-lit-search-mcp)
+(listed on the official MCP Registry as `io.github.Flan246/dsh-lit-search`):
+
+```bash
+claude mcp add lit-search -- npx -y dsh-lit-search-mcp
+```
+
+or in any MCP host's config: `"command": "npx", "args": ["-y", "dsh-lit-search-mcp"]`.

@@ -1,0 +1,7 @@
+export { searchPapers, type SearchOptions } from './search.js'
+export { citePaper, type CiteStyle } from './cite.js'
+export { bibEntries } from './bib.js'
+export { relatedPapers } from './related.js'
+export { formatPapers } from './format.js'
+export { ok, err } from './types.js'
+export type { Paper, Result } from './types.js'
